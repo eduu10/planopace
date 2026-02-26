@@ -1,26 +1,34 @@
 {
-  "name": "plano-pace",
+  "name": "planopace",
   "private": true,
-  "version": "1.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "vite --port=3000",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@tailwindcss/vite": "^4.1.14",
-    "@vitejs/plugin-react": "^5.0.4",
-    "lucide-react": "^0.546.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "motion": "^12.23.24"
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "db:push": "pnpm --filter database db:push",
+    "db:seed": "pnpm --filter database db:seed",
+    "db:studio": "pnpm --filter database db:studio",
+    "db:generate": "pnpm --filter database db:generate"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "autoprefixer": "^10.4.21",
-    "tailwindcss": "^4.1.14",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "turbo": "^2.5.0",
+    "typescript": "~5.8.2"
+  },
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "@nestjs/core",
+      "esbuild",
+      "sharp",
+      "msgpackr-extract",
+      "@scarf/scarf"
+    ]
   }
 }

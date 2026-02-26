@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PlanTier {
+  STARTER
+  PRO
+  ELITE
+}
+
+enum RunType {
+  EASY
+  INTERVALS
+  TEMPO
+  LONG_RUN
+  REST
+  RACE
+  TEST
+}
+
+enum GoalType {
+  PACE
+  DISTANCE
+  RACE_5K
+  RACE_10K
+  RACE_HALF
+  RACE_MARATHON
+  GENERAL_FITNESS
+}
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  name             String?
+  image            String?
+  passwordHash     String?
+  plan             PlanTier  @default(STARTER)
+  stripeCustomerId String?   @unique
+  stripeSubId      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  profile        AthleteProfile?
+  stravaAccount  StravaAccount?
+  runs           Run[]
+  trainingPlans  TrainingPlan[]
+  weeklyPlans    WeeklyPlan[]
+  metrics        MetricSnapshot[]
+}
+
+model AthleteProfile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  age             Int?
+  weight          Float?
+  height          Float?
+  experienceYears Float?
+  currentPace     Float?
+  goalType        GoalType  @default(PACE)
+  goalValue       String?
+  weeklyDays      Int       @default(3)
+  vdot            Float?
+  maxHr           Int?
+  restHr          Int?
+  updatedAt       DateTime  @updatedAt
+}
+
+model StravaAccount {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stravaId     Int      @unique
+  accessToken  String
+  refreshToken String
+  expiresAt    Int
+  scope        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Run {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stravaActivityId BigInt?  @unique
+  date             DateTime
+  distanceKm       Float
+  durationSeconds  Int
+  paceAvg          Float
+  paceMax          Float?
+  heartRateAvg     Int?
+  heartRateMax     Int?
+  cadenceAvg       Int?
+  elevationGain    Float?
+  calories         Int?
+  type             RunType  @default(EASY)
+  source           String   @default("strava")
+  polyline         String?
+  splits           Json?
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+model TrainingPlan {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month         Int
+  year          Int
+  goalType      GoalType
+  goalValue     String?
+  totalWeeks    Int      @default(4)
+  generatedBy   String   @default("claude")
+  aiPromptUsed  String?  @db.Text
+  aiResponseRaw String?  @db.Text
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+
+  weeklyPlans WeeklyPlan[]
+
+  @@unique([userId, month, year])
+}
+
+model WeeklyPlan {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingPlanId String
+  trainingPlan   TrainingPlan @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+  weekNumber     Int
+  startDate      DateTime
+  endDate        DateTime
+  status         String       @default("upcoming")
+
+  workouts Workout[]
+
+  @@index([userId, startDate])
+}
+
+model Workout {
+  id                String     @id @default(cuid())
+  weeklyPlanId      String
+  weeklyPlan        WeeklyPlan @relation(fields: [weeklyPlanId], references: [id], onDelete: Cascade)
+  dayOfWeek         Int
+  type              RunType
+  title             String
+  description       String     @db.Text
+  targetDistanceKm  Float?
+  targetPaceMin     Float?
+  targetPaceMax     Float?
+  targetDurationMin Int?
+  warmupMin         Int?
+  cooldownMin       Int?
+  intervals         Json?
+  completed         Boolean    @default(false)
+  matchedRunId      String?
+
+  @@index([weeklyPlanId, dayOfWeek])
+}
+
+model MetricSnapshot {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime
+  ctl       Float?
+  atl       Float?
+  tsb       Float?
+  weeklyKm  Float?
+  avgPace   Float?
+  vdot      Float?
+  runCount  Int?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
