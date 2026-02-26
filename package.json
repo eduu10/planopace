@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "build:web": "pnpm --filter web build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "db:push": "pnpm --filter database db:push",
