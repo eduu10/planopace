@@ -105,9 +105,6 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.39.0
         version: 0.39.0
-      database:
-        specifier: workspace:*
-        version: link:../../packages/database
       framer-motion:
         specifier: ^12.0.0
         version: 12.34.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
