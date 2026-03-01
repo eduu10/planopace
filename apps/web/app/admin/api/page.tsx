@@ -30,7 +30,7 @@ export default function AdminApiPage() {
   const [formState, setFormState] = useState({
     clientId: "",
     clientSecret: "",
-    callbackDomain: "http://localhost:3000",
+    callbackDomain: "https://planopace.vercel.app",
     webhookVerifyToken: "",
   });
 

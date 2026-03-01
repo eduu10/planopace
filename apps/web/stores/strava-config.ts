@@ -25,7 +25,7 @@ const DEFAULT_SCOPES = ["read", "activity:read_all"];
 const DEFAULT_CONFIG: StravaConfig = {
   clientId: "",
   clientSecret: "",
-  callbackDomain: "http://localhost:3000",
+  callbackDomain: "https://planopace.vercel.app",
   webhookVerifyToken: "",
   scopes: DEFAULT_SCOPES,
   isConnected: false,
