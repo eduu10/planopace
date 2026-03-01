@@ -15,6 +15,8 @@ import {
   AlertCircle,
   Lightbulb,
   Bell,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { useKanban, ADMIN_LIST, type KanbanStatus, type KanbanTask } from "@/stores/kanban";
 import { useAuth } from "@/lib/auth";
@@ -45,7 +47,7 @@ const avatarColors: Record<string, string> = {
 
 export default function KanbanPage() {
   const { user } = useAuth();
-  const { tasks, notifications, hydrate, addTask, moveTask, deleteTask, markNotifRead, markAllNotifsRead } = useKanban();
+  const { tasks, notifications, syncing, hydrate, startPolling, stopPolling, refresh, addTask, moveTask, deleteTask, markNotifRead, markAllNotifsRead } = useKanban();
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [showPauseModal, setShowPauseModal] = useState<{ taskId: string } | null>(null);
@@ -69,8 +71,9 @@ export default function KanbanPage() {
     : [];
 
   useEffect(() => {
-    hydrate();
-  }, [hydrate]);
+    hydrate().then(() => startPolling());
+    return () => stopPolling();
+  }, [hydrate, startPolling, stopPolling]);
 
   const handleCreateTask = () => {
     if (!newTask.title.trim() || !user) return;
@@ -123,9 +126,29 @@ export default function KanbanPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold">Kanban</h1>
-          <p className="text-gray-400 text-sm mt-1">Gerencie as tarefas da equipe</p>
+          <p className="text-gray-400 text-sm mt-1">
+            Gerencie as tarefas da equipe
+            <span className="inline-flex items-center gap-1 ml-2 text-[10px] text-green-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              Sincronizado
+            </span>
+          </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Sync indicator + refresh */}
+          <button
+            onClick={() => refresh()}
+            disabled={syncing}
+            className="p-2.5 rounded-xl bg-white/5 border border-white/[0.06] hover:bg-white/10 transition-all disabled:opacity-50"
+            title="Atualizar"
+          >
+            {syncing ? (
+              <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 text-gray-400" />
+            )}
+          </button>
+
           {/* Notification Bell */}
           <div className="relative">
             <button

@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { CheckCircle2, XCircle, Loader2, Activity } from "lucide-react";
 import { useStravaConfig } from "@/stores/strava-config";
 
 type CallbackStatus = "loading" | "success" | "error";
 
-export default function StravaCallbackPage() {
+function StravaCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { config, hydrate } = useStravaConfig();
@@ -179,5 +179,19 @@ export default function StravaCallbackPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function StravaCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+        </div>
+      }
+    >
+      <StravaCallbackContent />
+    </Suspense>
   );
 }
