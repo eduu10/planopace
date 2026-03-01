@@ -1,19 +1,37 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Activity, CreditCard, Settings, LogOut, ChevronRight, Check, Shield } from "lucide-react";
+import { Activity, CreditCard, Settings, LogOut, ChevronRight, Check, Shield, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function PerfilPage() {
   const { user, hydrate, logout, isAdmin } = useAuth();
   const router = useRouter();
+  const [connectingStrava, setConnectingStrava] = useState(false);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  const handleConnectStrava = async () => {
+    setConnectingStrava(true);
+    try {
+      const res = await fetch("/api/strava/auth");
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert("Erro: API Strava não configurada. Contate o administrador.");
+        setConnectingStrava(false);
+      }
+    } catch {
+      alert("Erro ao conectar com Strava. Tente novamente.");
+      setConnectingStrava(false);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -84,8 +102,19 @@ export default function PerfilPage() {
             {user?.strava ? (
               <Check className="w-5 h-5 text-green-500" />
             ) : (
-              <button className="text-xs bg-[#FC4C02] text-white px-3 py-1 rounded-full font-bold">
-                Conectar
+              <button
+                onClick={handleConnectStrava}
+                disabled={connectingStrava}
+                className="text-xs bg-[#FC4C02] text-white px-3 py-1 rounded-full font-bold disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {connectingStrava ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Conectando...
+                  </>
+                ) : (
+                  "Conectar"
+                )}
               </button>
             )}
           </div>

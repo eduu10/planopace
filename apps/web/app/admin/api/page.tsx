@@ -4,12 +4,9 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Key,
-  Eye,
-  EyeOff,
   Copy,
   Check,
   ExternalLink,
-  RefreshCw,
   Shield,
   Activity,
   Globe,
@@ -17,56 +14,26 @@ import {
   AlertTriangle,
   CheckCircle2,
   Settings2,
+  Server,
+  RefreshCw,
 } from "lucide-react";
-import { useStravaConfig } from "@/stores/strava-config";
 
 export default function AdminApiPage() {
-  const { config, save, hydrate, getCallbackUrl, getAuthorizationUrl } = useStravaConfig();
-
-  const [showSecret, setShowSecret] = useState(false);
-  const [showWebhookToken, setShowWebhookToken] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
-  const [formState, setFormState] = useState({
-    clientId: "",
-    clientSecret: "",
-    callbackDomain: "https://planopace.vercel.app",
-    webhookVerifyToken: "",
-  });
+  const [apiStatus, setApiStatus] = useState<"loading" | "configured" | "not_configured">("loading");
 
   useEffect(() => {
-    hydrate();
-  }, [hydrate]);
+    checkApiStatus();
+  }, []);
 
-  useEffect(() => {
-    setFormState({
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
-      callbackDomain: config.callbackDomain,
-      webhookVerifyToken: config.webhookVerifyToken,
-    });
-  }, [config.clientId, config.clientSecret, config.callbackDomain, config.webhookVerifyToken]);
-
-  const handleSave = () => {
-    save({
-      clientId: formState.clientId,
-      clientSecret: formState.clientSecret,
-      callbackDomain: formState.callbackDomain,
-      webhookVerifyToken: formState.webhookVerifyToken,
-    });
-    setTestStatus("idle");
-  };
-
-  const handleTestConnection = async () => {
-    setTestStatus("testing");
-    // Save first so testConnection uses latest values
-    save({
-      clientId: formState.clientId,
-      clientSecret: formState.clientSecret,
-    });
-    const ok = await useStravaConfig.getState().testConnection();
-    setTestStatus(ok ? "success" : "error");
-    setTimeout(() => setTestStatus("idle"), 4000);
+  const checkApiStatus = async () => {
+    try {
+      const res = await fetch("/api/strava/auth");
+      const data = await res.json();
+      setApiStatus(data.url ? "configured" : "not_configured");
+    } catch {
+      setApiStatus("not_configured");
+    }
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -75,24 +42,14 @@ export default function AdminApiPage() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const generateWebhookToken = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let token = "";
-    for (let i = 0; i < 32; i++) {
-      token += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setFormState((prev) => ({ ...prev, webhookVerifyToken: token }));
-  };
+  const callbackUrl = "https://planopace.vercel.app/auth/strava/callback";
+  const webhookUrl = "https://planopace.vercel.app/api/strava/webhook";
 
-  const callbackUrl = formState.callbackDomain
-    ? `${formState.callbackDomain.replace(/\/+$/, "")}/auth/strava/callback`
-    : "";
-
-  const webhookUrl = formState.callbackDomain
-    ? `${formState.callbackDomain.replace(/\/+$/, "")}/api/strava/webhook`
-    : "";
-
-  const isConfigured = formState.clientId && formState.clientSecret;
+  const envVars = [
+    { name: "STRAVA_CLIENT_ID", description: "Client ID da aplicação Strava", example: "12345" },
+    { name: "STRAVA_CLIENT_SECRET", description: "Client Secret da aplicação Strava", example: "a1b2c3d4e5f6..." },
+    { name: "NEXT_PUBLIC_APP_URL", description: "URL da aplicação em produção", example: "https://planopace.vercel.app" },
+  ];
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -104,7 +61,7 @@ export default function AdminApiPage() {
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">Configurações da API</h1>
-            <p className="text-gray-400 mt-0.5">Gerencie credenciais e integrações do Strava.</p>
+            <p className="text-gray-400 mt-0.5">Integração Strava OAuth para todos os usuários.</p>
           </div>
         </div>
       </div>
@@ -114,29 +71,39 @@ export default function AdminApiPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className={`rounded-2xl p-4 border flex items-center gap-3 ${
-          isConfigured
+          apiStatus === "configured"
             ? "bg-green-500/5 border-green-500/20"
-            : "bg-yellow-500/5 border-yellow-500/20"
+            : apiStatus === "not_configured"
+            ? "bg-yellow-500/5 border-yellow-500/20"
+            : "bg-white/5 border-white/[0.06]"
         }`}
       >
-        {isConfigured ? (
+        {apiStatus === "loading" ? (
+          <RefreshCw className="w-5 h-5 text-gray-400 animate-spin shrink-0" />
+        ) : apiStatus === "configured" ? (
           <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
         ) : (
           <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
         )}
         <div>
-          <p className={`text-sm font-medium ${isConfigured ? "text-green-400" : "text-yellow-400"}`}>
-            {isConfigured ? "API Strava configurada" : "API Strava não configurada"}
+          <p className={`text-sm font-medium ${
+            apiStatus === "configured" ? "text-green-400" : apiStatus === "not_configured" ? "text-yellow-400" : "text-gray-400"
+          }`}>
+            {apiStatus === "loading"
+              ? "Verificando configuração..."
+              : apiStatus === "configured"
+              ? "API Strava ativa — Usuários podem conectar suas contas"
+              : "API Strava não configurada — Configure as variáveis de ambiente"}
           </p>
           <p className="text-xs text-gray-500 mt-0.5">
-            {isConfigured
-              ? "As credenciais estão salvas. Os usuários podem conectar suas contas Strava."
-              : "Configure o Client ID e Client Secret para habilitar a integração com o Strava."}
+            {apiStatus === "configured"
+              ? "As credenciais estão configuradas no servidor. O botão \"Conectar Strava\" está funcional para todos os usuários."
+              : "Adicione STRAVA_CLIENT_ID e STRAVA_CLIENT_SECRET nas variáveis de ambiente da Vercel."}
           </p>
         </div>
       </motion.div>
 
-      {/* Strava Credentials */}
+      {/* Environment Variables */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -146,94 +113,109 @@ export default function AdminApiPage() {
         <div className="p-6 border-b border-white/[0.06]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Activity className="w-5 h-5 text-orange-500" />
-              <h2 className="text-lg font-bold">Credenciais Strava OAuth</h2>
+              <Server className="w-5 h-5 text-orange-500" />
+              <h2 className="text-lg font-bold">Variáveis de Ambiente (Vercel)</h2>
             </div>
             <a
-              href="https://www.strava.com/settings/api"
+              href="https://vercel.com/eduu10s-projects/planopace/settings/environment-variables"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-xs text-orange-500 hover:text-orange-400 transition-colors"
             >
-              Abrir Strava API
+              Abrir Vercel Settings
               <ExternalLink className="w-3 h-3" />
             </a>
           </div>
           <p className="text-sm text-gray-500 mt-1 ml-8">
-            Obtenha suas credenciais em{" "}
-            <a
-              href="https://www.strava.com/settings/api"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-orange-500 hover:underline"
-            >
-              strava.com/settings/api
-            </a>
+            As credenciais ficam seguras no servidor — nunca expostas ao navegador do cliente.
           </p>
         </div>
 
-        <div className="p-6 space-y-5">
-          {/* Client ID */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Client ID</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={formState.clientId}
-                onChange={(e) => setFormState((prev) => ({ ...prev, clientId: e.target.value }))}
-                placeholder="Ex: 12345"
-                className="flex-1 bg-[#0A0A0B] border border-white/[0.08] rounded-xl px-4 py-3 text-sm font-mono text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500/50 transition-all"
-              />
-              <button
-                onClick={() => copyToClipboard(formState.clientId, "clientId")}
-                className="px-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/[0.08]"
-                title="Copiar"
-              >
-                {copied === "clientId" ? (
-                  <Check className="w-4 h-4 text-green-400" />
-                ) : (
-                  <Copy className="w-4 h-4 text-gray-400" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Client Secret */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Client Secret</label>
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <input
-                  type={showSecret ? "text" : "password"}
-                  value={formState.clientSecret}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, clientSecret: e.target.value }))}
-                  placeholder="Ex: a1b2c3d4e5f6..."
-                  className="w-full bg-[#0A0A0B] border border-white/[0.08] rounded-xl px-4 py-3 text-sm font-mono text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500/50 transition-all pr-12"
-                />
+        <div className="p-6 space-y-4">
+          {envVars.map((env) => (
+            <div key={env.name} className="bg-[#0A0A0B] rounded-xl p-4 border border-white/[0.06]">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-sm font-mono font-bold text-orange-400">{env.name}</p>
                 <button
-                  onClick={() => setShowSecret(!showSecret)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                  onClick={() => copyToClipboard(env.name, env.name)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                  title="Copiar nome"
                 >
-                  {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {copied === env.name ? (
+                    <Check className="w-3.5 h-3.5 text-green-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-gray-500" />
+                  )}
                 </button>
               </div>
-              <button
-                onClick={() => copyToClipboard(formState.clientSecret, "clientSecret")}
-                className="px-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/[0.08]"
-                title="Copiar"
-              >
-                {copied === "clientSecret" ? (
-                  <Check className="w-4 h-4 text-green-400" />
-                ) : (
-                  <Copy className="w-4 h-4 text-gray-400" />
-                )}
-              </button>
+              <p className="text-xs text-gray-500">{env.description}</p>
+              <p className="text-xs text-gray-600 mt-1 font-mono">Ex: {env.example}</p>
             </div>
-            <p className="text-xs text-gray-600 mt-1.5 flex items-center gap-1">
-              <Shield className="w-3 h-3" />
-              Nunca compartilhe seu Client Secret publicamente.
-            </p>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* How to Configure */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="bg-[#141415] rounded-2xl border border-white/[0.06] overflow-hidden"
+      >
+        <div className="p-6 border-b border-white/[0.06]">
+          <div className="flex items-center gap-3">
+            <Activity className="w-5 h-5 text-orange-500" />
+            <h2 className="text-lg font-bold">Como Configurar</h2>
           </div>
+        </div>
+
+        <div className="p-6">
+          <ol className="space-y-4 text-sm">
+            <li className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">1</span>
+              <div>
+                <p className="font-medium">Crie uma aplicação no Strava</p>
+                <p className="text-gray-500 mt-0.5">
+                  Acesse{" "}
+                  <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:underline">
+                    strava.com/settings/api
+                  </a>{" "}
+                  e registre sua aplicação.
+                </p>
+              </div>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">2</span>
+              <div>
+                <p className="font-medium">Configure o Authorization Callback Domain</p>
+                <p className="text-gray-500 mt-0.5">
+                  No Strava, defina o callback domain como: <span className="text-orange-400 font-mono">planopace.vercel.app</span>
+                </p>
+              </div>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">3</span>
+              <div>
+                <p className="font-medium">Copie Client ID e Client Secret</p>
+                <p className="text-gray-500 mt-0.5">
+                  Anote o Client ID e Client Secret gerados pelo Strava.
+                </p>
+              </div>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">4</span>
+              <div>
+                <p className="font-medium">Adicione nas variáveis de ambiente da Vercel</p>
+                <p className="text-gray-500 mt-0.5">
+                  Vá em{" "}
+                  <a href="https://vercel.com/eduu10s-projects/planopace/settings/environment-variables" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:underline">
+                    Vercel → Settings → Environment Variables
+                  </a>{" "}
+                  e adicione as variáveis acima. Depois faça um redeploy.
+                </p>
+              </div>
+            </li>
+          </ol>
         </div>
       </motion.div>
 
@@ -247,42 +229,25 @@ export default function AdminApiPage() {
         <div className="p-6 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
             <Globe className="w-5 h-5 text-blue-500" />
-            <h2 className="text-lg font-bold">Domínio de Autorização</h2>
+            <h2 className="text-lg font-bold">URLs de Integração</h2>
           </div>
           <p className="text-sm text-gray-500 mt-1 ml-8">
-            Configure o domínio para os callbacks OAuth do Strava.
+            URLs que devem ser configuradas na aplicação Strava.
           </p>
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Callback Domain */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Domínio da Aplicação
-            </label>
-            <input
-              type="text"
-              value={formState.callbackDomain}
-              onChange={(e) => setFormState((prev) => ({ ...prev, callbackDomain: e.target.value }))}
-              placeholder="https://seudominio.com"
-              className="w-full bg-[#0A0A0B] border border-white/[0.08] rounded-xl px-4 py-3 text-sm font-mono text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500/50 transition-all"
-            />
-            <p className="text-xs text-gray-600 mt-1.5">
-              Use <span className="text-gray-400 font-mono">http://localhost:3000</span> para desenvolvimento local.
-            </p>
-          </div>
-
-          {/* Generated Callback URL */}
+          {/* Callback URL */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               <div className="flex items-center gap-2">
                 <Link2 className="w-4 h-4 text-orange-500" />
-                URL de Callback (Authorization Callback Domain)
+                Authorization Callback Domain
               </div>
             </label>
             <div className="flex gap-2">
               <div className="flex-1 bg-[#0A0A0B] border border-white/[0.08] rounded-xl px-4 py-3 text-sm font-mono text-orange-400 break-all">
-                {callbackUrl || "—"}
+                {callbackUrl}
               </div>
               <button
                 onClick={() => copyToClipboard(callbackUrl, "callbackUrl")}
@@ -297,7 +262,7 @@ export default function AdminApiPage() {
               </button>
             </div>
             <p className="text-xs text-gray-600 mt-1.5">
-              Cole esta URL no campo <strong className="text-gray-400">&quot;Authorization Callback Domain&quot;</strong> nas configurações da API do Strava.
+              Cole <strong className="text-gray-400">planopace.vercel.app</strong> no campo &quot;Authorization Callback Domain&quot; do Strava.
             </p>
           </div>
 
@@ -311,7 +276,7 @@ export default function AdminApiPage() {
             </label>
             <div className="flex gap-2">
               <div className="flex-1 bg-[#0A0A0B] border border-white/[0.08] rounded-xl px-4 py-3 text-sm font-mono text-blue-400 break-all">
-                {webhookUrl || "—"}
+                {webhookUrl}
               </div>
               <button
                 onClick={() => copyToClipboard(webhookUrl, "webhookUrl")}
@@ -332,7 +297,39 @@ export default function AdminApiPage() {
         </div>
       </motion.div>
 
-      {/* Webhook Verify Token */}
+      {/* OAuth Scopes */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+        className="bg-[#141415] rounded-2xl border border-white/[0.06] overflow-hidden"
+      >
+        <div className="p-6 border-b border-white/[0.06]">
+          <div className="flex items-center gap-3">
+            <Shield className="w-5 h-5 text-purple-500" />
+            <h2 className="text-lg font-bold">Escopos & Permissões</h2>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="flex flex-wrap gap-2 mb-4">
+            {["read", "activity:read_all"].map((scope) => (
+              <span
+                key={scope}
+                className="px-3 py-1.5 bg-orange-500/10 text-orange-400 text-xs font-mono rounded-lg border border-orange-500/20"
+              >
+                {scope}
+              </span>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500">
+            <strong className="text-gray-400">read</strong> — Leitura de dados públicos do atleta.{" "}
+            <strong className="text-gray-400">activity:read_all</strong> — Leitura de todas as atividades (corridas, pace, distância, FC, etc).
+          </p>
+        </div>
+      </motion.div>
+
+      {/* API Info & Limits */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -341,80 +338,8 @@ export default function AdminApiPage() {
       >
         <div className="p-6 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
-            <Shield className="w-5 h-5 text-purple-500" />
-            <h2 className="text-lg font-bold">Webhook & Segurança</h2>
-          </div>
-        </div>
-
-        <div className="p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Webhook Verify Token
-            </label>
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <input
-                  type={showWebhookToken ? "text" : "password"}
-                  value={formState.webhookVerifyToken}
-                  onChange={(e) =>
-                    setFormState((prev) => ({ ...prev, webhookVerifyToken: e.target.value }))
-                  }
-                  placeholder="Token de verificação do webhook"
-                  className="w-full bg-[#0A0A0B] border border-white/[0.08] rounded-xl px-4 py-3 text-sm font-mono text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500/50 transition-all pr-12"
-                />
-                <button
-                  onClick={() => setShowWebhookToken(!showWebhookToken)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
-                >
-                  {showWebhookToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              <button
-                onClick={generateWebhookToken}
-                className="px-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/[0.08]"
-                title="Gerar token aleatório"
-              >
-                <RefreshCw className="w-4 h-4 text-gray-400" />
-              </button>
-            </div>
-            <p className="text-xs text-gray-600 mt-1.5">
-              Token usado para verificar assinaturas de webhook do Strava. Clique no ícone para gerar um automaticamente.
-            </p>
-          </div>
-
-          {/* Scopes */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Escopos OAuth
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {config.scopes.map((scope) => (
-                <span
-                  key={scope}
-                  className="px-3 py-1.5 bg-orange-500/10 text-orange-400 text-xs font-mono rounded-lg border border-orange-500/20"
-                >
-                  {scope}
-                </span>
-              ))}
-            </div>
-            <p className="text-xs text-gray-600 mt-1.5">
-              Permissões solicitadas ao usuário durante a autorização OAuth.
-            </p>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* API Info & Limits */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="bg-[#141415] rounded-2xl border border-white/[0.06] overflow-hidden"
-      >
-        <div className="p-6 border-b border-white/[0.06]">
-          <div className="flex items-center gap-3">
             <Settings2 className="w-5 h-5 text-gray-400" />
-            <h2 className="text-lg font-bold">Informações da API</h2>
+            <h2 className="text-lg font-bold">Limites da API Strava</h2>
           </div>
         </div>
 
@@ -440,95 +365,18 @@ export default function AdminApiPage() {
         </div>
       </motion.div>
 
-      {/* Authorization Preview */}
-      {isConfigured && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-[#141415] rounded-2xl border border-white/[0.06] overflow-hidden"
-        >
-          <div className="p-6 border-b border-white/[0.06]">
-            <div className="flex items-center gap-3">
-              <ExternalLink className="w-5 h-5 text-green-500" />
-              <h2 className="text-lg font-bold">Preview da URL de Autorização</h2>
-            </div>
-          </div>
-
-          <div className="p-6">
-            <div className="bg-[#0A0A0B] rounded-xl p-4 border border-white/[0.06]">
-              <p className="text-xs text-gray-500 mb-2">URL gerada para o fluxo OAuth:</p>
-              <p className="text-xs font-mono text-green-400 break-all leading-relaxed">
-                {getAuthorizationUrl()}
-              </p>
-            </div>
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => copyToClipboard(getAuthorizationUrl(), "authUrl")}
-                className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm transition-colors border border-white/[0.08]"
-              >
-                {copied === "authUrl" ? (
-                  <Check className="w-4 h-4 text-green-400" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
-                Copiar URL
-              </button>
-              <a
-                href={getAuthorizationUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-xl text-sm transition-colors border border-orange-500/20"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Testar OAuth
-              </a>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Action Buttons */}
+      {/* Refresh Status */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="flex flex-col sm:flex-row gap-3"
+        transition={{ delay: 0.35 }}
       >
         <button
-          onClick={handleSave}
-          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition-colors"
+          onClick={checkApiStatus}
+          className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-medium rounded-xl transition-colors border border-white/[0.08]"
         >
-          <Check className="w-4 h-4" />
-          Salvar Configurações
-        </button>
-        <button
-          onClick={handleTestConnection}
-          disabled={!isConfigured || testStatus === "testing"}
-          className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-colors border ${
-            testStatus === "success"
-              ? "bg-green-500/10 border-green-500/30 text-green-400"
-              : testStatus === "error"
-              ? "bg-red-500/10 border-red-500/30 text-red-400"
-              : "bg-white/5 border-white/[0.08] text-white hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
-          }`}
-        >
-          {testStatus === "testing" ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
-          ) : testStatus === "success" ? (
-            <CheckCircle2 className="w-4 h-4" />
-          ) : testStatus === "error" ? (
-            <AlertTriangle className="w-4 h-4" />
-          ) : (
-            <Activity className="w-4 h-4" />
-          )}
-          {testStatus === "testing"
-            ? "Testando..."
-            : testStatus === "success"
-            ? "Conexão OK!"
-            : testStatus === "error"
-            ? "Falha na conexão"
-            : "Testar Conexão"}
+          <RefreshCw className="w-4 h-4" />
+          Verificar Status da API
         </button>
       </motion.div>
     </div>

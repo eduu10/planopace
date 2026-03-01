@@ -3,20 +3,14 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { CheckCircle2, XCircle, Loader2, Activity } from "lucide-react";
-import { useStravaConfig } from "@/stores/strava-config";
 
 type CallbackStatus = "loading" | "success" | "error";
 
 function StravaCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { config, hydrate } = useStravaConfig();
   const [status, setStatus] = useState<CallbackStatus>("loading");
   const [message, setMessage] = useState("Processando autorização do Strava...");
-
-  useEffect(() => {
-    hydrate();
-  }, [hydrate]);
 
   useEffect(() => {
     const code = searchParams.get("code");
@@ -44,63 +38,57 @@ function StravaCallbackContent() {
 
   const exchangeToken = async (code: string, scope: string) => {
     try {
-      const stravaConfig = useStravaConfig.getState().config;
-
-      if (!stravaConfig.clientId || !stravaConfig.clientSecret) {
-        setStatus("error");
-        setMessage("Credenciais da API Strava não configuradas. Configure no painel admin.");
-        return;
-      }
-
-      const res = await fetch("https://www.strava.com/oauth/token", {
+      const res = await fetch("/api/strava/callback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_id: stravaConfig.clientId,
-          client_secret: stravaConfig.clientSecret,
-          code,
-          grant_type: "authorization_code",
-        }),
+        body: JSON.stringify({ code }),
       });
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.message || `Erro HTTP ${res.status}`);
+        throw new Error(errorData?.error || `Erro HTTP ${res.status}`);
       }
 
       const data = await res.json();
 
-      // Store the tokens (in a real app, send to backend)
+      // Save Strava connection to user profile
       if (typeof window !== "undefined") {
         localStorage.setItem(
           "planopace_strava_tokens",
           JSON.stringify({
-            accessToken: data.access_token,
-            refreshToken: data.refresh_token,
-            expiresAt: data.expires_at,
-            athleteId: data.athlete?.id,
-            athleteName: `${data.athlete?.firstname || ""} ${data.athlete?.lastname || ""}`.trim(),
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken,
+            expiresAt: data.expiresAt,
+            athlete: data.athlete,
             scope,
             connectedAt: new Date().toISOString(),
           })
         );
+
+        // Update user strava status
+        const storedUser = localStorage.getItem("planopace_user");
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          user.strava = true;
+          user.stravaAthlete = data.athlete;
+          localStorage.setItem("planopace_user", JSON.stringify(user));
+        }
       }
 
       setStatus("success");
       setMessage(
-        `Strava conectado com sucesso! Bem-vindo, ${data.athlete?.firstname || "atleta"}.`
+        `Strava conectado com sucesso! Bem-vindo, ${data.athlete?.firstName || "atleta"}.`
       );
 
-      // Redirect to dashboard after 3 seconds
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push("/perfil");
       }, 3000);
     } catch (err) {
       setStatus("error");
       setMessage(
         err instanceof Error
           ? err.message
-          : "Erro ao trocar o token. Verifique as credenciais e tente novamente."
+          : "Erro ao conectar com o Strava. Tente novamente."
       );
     }
   };
@@ -109,7 +97,6 @@ function StravaCallbackContent() {
     <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="bg-[#141415] rounded-2xl border border-white/[0.06] p-8 text-center">
-          {/* Strava Logo */}
           <div className="flex justify-center mb-6">
             <div
               className={`p-4 rounded-2xl ${
@@ -130,13 +117,11 @@ function StravaCallbackContent() {
             </div>
           </div>
 
-          {/* Title */}
           <div className="flex items-center justify-center gap-2 mb-2">
             <Activity className="w-5 h-5 text-orange-500" />
             <h1 className="text-xl font-bold text-white">Strava Connect</h1>
           </div>
 
-          {/* Status Message */}
           <p
             className={`text-sm mt-3 ${
               status === "success"
@@ -149,10 +134,9 @@ function StravaCallbackContent() {
             {message}
           </p>
 
-          {/* Actions */}
           <div className="mt-6 space-y-3">
             {status === "success" && (
-              <p className="text-xs text-gray-500">Redirecionando para o dashboard em 3 segundos...</p>
+              <p className="text-xs text-gray-500">Redirecionando para o perfil em 3 segundos...</p>
             )}
             {status === "error" && (
               <div className="space-y-2">
@@ -173,7 +157,6 @@ function StravaCallbackContent() {
           </div>
         </div>
 
-        {/* Footer */}
         <p className="text-center text-xs text-gray-600 mt-4">
           PLANO<span className="text-orange-500">PACE</span> — Integração Strava OAuth 2.0
         </p>
