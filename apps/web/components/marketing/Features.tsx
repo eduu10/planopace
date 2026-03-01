@@ -6,8 +6,8 @@ import { Activity, Zap, BarChart3, Smartphone } from "lucide-react";
 const features = [
   {
     icon: <Zap className="w-8 h-8 text-orange-500" />,
-    title: "IA Generativa de Treinos",
-    description: "Nossa IA analisa seu histórico e cria planilhas mensais personalizadas para o seu objetivo, seja 5k ou Maratona."
+    title: "Geração Automática de Treinos",
+    description: "Analisamos seu histórico e criamos planilhas mensais personalizadas para o seu objetivo, seja 5k ou Maratona."
   },
   {
     icon: <Smartphone className="w-8 h-8 text-orange-500" />,
@@ -17,7 +17,7 @@ const features = [
   {
     icon: <Activity className="w-8 h-8 text-orange-500" />,
     title: "Ajustes Dinâmicos",
-    description: "Correu mais lento que o planejado? A IA recalcula a carga da semana seguinte para evitar lesões e manter a evolução."
+    description: "Correu mais lento que o planejado? O sistema recalcula a carga da semana seguinte para evitar lesões e manter a evolução."
   },
   {
     icon: <BarChart3 className="w-8 h-8 text-orange-500" />,

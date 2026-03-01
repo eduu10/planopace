@@ -1,30 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Home, Dumbbell, TrendingUp, User } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Home, Dumbbell, TrendingUp, User, Trophy } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { useEffect } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/treino", label: "Treino", icon: Dumbbell },
+  { href: "/vitorias", label: "Vitórias", icon: Trophy },
   { href: "/evolucao", label: "Evolução", icon: TrendingUp },
   { href: "/perfil", label: "Perfil", icon: User },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, hydrate } = useAuth();
+
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("planopace_user");
+      if (!stored) {
+        router.push("/login");
+      }
+    }
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] text-white">
       {/* Top bar */}
       <header className="fixed top-0 w-full z-50 bg-[#0A0A0B]/80 backdrop-blur-md border-b border-white/[0.06] px-4 py-3">
         <div className="max-w-lg mx-auto flex items-center justify-between">
-          <span className="text-xl font-bold italic tracking-tighter">
-            PLANO<span className="text-orange-500">PACE</span>
-          </span>
-          <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-sm font-bold">
-            J
-          </div>
+          <Link href="/dashboard">
+            <span className="text-xl font-bold italic tracking-tighter">
+              PLANO<span className="text-orange-500">PACE</span>
+            </span>
+          </Link>
+          <Link href="/perfil" className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-sm font-bold">
+            {user?.avatar || "?"}
+          </Link>
         </div>
       </header>
 

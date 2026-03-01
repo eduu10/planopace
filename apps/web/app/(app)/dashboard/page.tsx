@@ -1,7 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Activity, Flame, Timer, TrendingUp, Brain, ChevronRight, Zap } from "lucide-react";
+import { Activity, Flame, Timer, TrendingUp, Brain, ChevronRight, Zap, Camera } from "lucide-react";
+import Link from "next/link";
+import { useAuth } from "@/lib/auth";
+import { useEffect } from "react";
 
 const stats = [
   { label: "Km esta semana", value: "23.4", icon: Activity, color: "text-green-500", trend: "+12%" },
@@ -36,6 +39,14 @@ const typeLabels: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const { user, hydrate } = useAuth();
+
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  const firstName = user?.name?.split(" ")[0] || "Corredor";
+
   return (
     <div className="space-y-6 py-4">
       {/* Greeting */}
@@ -43,7 +54,7 @@ export default function DashboardPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <h1 className="text-2xl font-bold">Bom dia, João! 👋</h1>
+        <h1 className="text-2xl font-bold">Bom dia, {firstName}! 👋</h1>
         <p className="text-gray-400 text-sm mt-1">Seu treino de hoje está pronto.</p>
       </motion.div>
 
@@ -120,13 +131,37 @@ export default function DashboardPage() {
         </p>
       </motion.div>
 
+      {/* Registrar Vitória */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35 }}
+      >
+        <Link href="/vitorias" className="block">
+          <div className="bg-gradient-to-r from-orange-500/20 to-orange-600/10 rounded-2xl p-5 border border-orange-500/30 hover:border-orange-500/50 transition-all active:scale-[0.98]">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-orange-500 p-2.5 rounded-xl">
+                  <Camera className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="font-bold">Registrar Vitória</h2>
+                  <p className="text-sm text-gray-400">Tire uma foto e compartilhe!</p>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-orange-500" />
+            </div>
+          </div>
+        </Link>
+      </motion.div>
+
       {/* Recent Runs */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold">Corridas Recentes</h2>
-          <button className="text-orange-500 text-sm flex items-center gap-1">
+          <Link href="/corridas" className="text-orange-500 text-sm flex items-center gap-1">
             Ver todas <ChevronRight className="w-4 h-4" />
-          </button>
+          </Link>
         </div>
         <div className="space-y-2">
           {[

@@ -4,6 +4,9 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Plano Pace — Seu Treinador Virtual de Corrida',
   description: 'Planilhas personalizadas por IA, integração com Strava e evolução em tempo real. Seu treinador virtual autônomo de corrida.',
+  icons: {
+    icon: '/favicon.svg',
+  },
   openGraph: {
     title: 'Plano Pace — Seu Treinador Virtual de Corrida',
     description: 'Planilhas personalizadas por IA, integração com Strava e evolução em tempo real.',

@@ -8,8 +8,9 @@
   --color-card: #141415;
   --color-border: rgba(255, 255, 255, 0.06);
 
-  --animate-marquee: marquee 25s linear infinite;
-  --animate-marquee2: marquee2 25s linear infinite;
+  --animate-marquee: marquee 45s linear infinite;
+  --animate-marquee2: marquee2 45s linear infinite;
+  --animate-brands-slide: brands-slide 30s linear infinite;
 
   @keyframes marquee {
     0% { transform: translateX(0%); }
@@ -19,8 +20,13 @@
     0% { transform: translateX(100%); }
     100% { transform: translateX(0%); }
   }
+  @keyframes brands-slide {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
 }
 
-html {
+html, body {
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }

@@ -7,7 +7,7 @@ const steps = [
   {
     icon: <UserPlus className="w-8 h-8 text-white" />,
     title: "Crie seu Perfil",
-    description: "Defina seus objetivos: 5k, 10k, Meia ou Maratona. Nossa IA analisa seu histórico."
+    description: "Defina seus objetivos: 5k, 10k, Meia ou Maratona. Analisamos seu histórico completo."
   },
   {
     icon: <Link className="w-8 h-8 text-white" />,

@@ -20,13 +20,13 @@ const testimonials = [
     name: "Ricardo Souza",
     role: "Triatleta",
     image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=1000&auto=format&fit=crop",
-    quote: "A integração com o Strava é perfeita. Não preciso ficar digitando nada. Termino o treino e a IA já recalcula minha semana."
+    quote: "A integração com o Strava é perfeita. Não preciso ficar digitando nada. Termino o treino e o sistema já recalcula minha semana."
   }
 ];
 
 export default function Testimonials() {
   return (
-    <section className="py-24 bg-black border-t border-white/5">
+    <section id="testimonials" className="py-24 bg-black border-t border-white/5">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
