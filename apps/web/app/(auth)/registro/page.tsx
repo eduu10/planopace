@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Target, Calendar, Check, ShoppingBag, Shirt } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Target, Calendar, Check, ShoppingBag, Shirt, Loader2 } from "lucide-react";
 
 const plans = [
   {
@@ -37,6 +37,7 @@ export default function RegistroPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [stravaLoading, setStravaLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("semestral");
   const [addShirt, setAddShirt] = useState(false);
   const [form, setForm] = useState({
@@ -47,6 +48,21 @@ export default function RegistroPage() {
     experience: "",
     daysPerWeek: "4",
   });
+
+  const handleStravaRegister = async () => {
+    setStravaLoading(true);
+    try {
+      const res = await fetch("/api/strava/auth");
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setStravaLoading(false);
+      }
+    } catch {
+      setStravaLoading(false);
+    }
+  };
 
   const currentPlan = plans.find((p) => p.id === selectedPlan);
   const showUpsell = selectedPlan === "mensal" || selectedPlan === "semestral";
@@ -429,6 +445,22 @@ export default function RegistroPage() {
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                 </svg>
                 Google
+              </button>
+
+              {/* Strava OAuth */}
+              <button
+                onClick={handleStravaRegister}
+                disabled={stravaLoading}
+                className="w-full mt-3 bg-[#FC4C02]/10 hover:bg-[#FC4C02]/20 border border-[#FC4C02]/30 text-[#FC4C02] font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                {stravaLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
+                  </svg>
+                )}
+                {stravaLoading ? "Conectando..." : "Strava"}
               </button>
             </>
           )}

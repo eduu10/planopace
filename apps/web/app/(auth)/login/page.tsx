@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Mail, Lock, ArrowRight, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [stravaLoading, setStravaLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -36,6 +37,23 @@ export default function LoginPage() {
         setLoading(false);
       }
     }, 800);
+  };
+
+  const handleStravaLogin = async () => {
+    setStravaLoading(true);
+    try {
+      const res = await fetch("/api/strava/auth");
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError("Strava não configurado. Contate o administrador.");
+        setStravaLoading(false);
+      }
+    } catch {
+      setError("Erro ao conectar com Strava. Tente novamente.");
+      setStravaLoading(false);
+    }
   };
 
   return (
@@ -144,11 +162,19 @@ export default function LoginPage() {
           </button>
 
           {/* Strava OAuth */}
-          <button className="w-full mt-3 bg-[#FC4C02]/10 hover:bg-[#FC4C02]/20 border border-[#FC4C02]/30 text-[#FC4C02] font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-3">
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
-            </svg>
-            Strava
+          <button
+            onClick={handleStravaLogin}
+            disabled={stravaLoading}
+            className="w-full mt-3 bg-[#FC4C02]/10 hover:bg-[#FC4C02]/20 border border-[#FC4C02]/30 text-[#FC4C02] font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-3 disabled:opacity-50"
+          >
+            {stravaLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
+              </svg>
+            )}
+            {stravaLoading ? "Conectando..." : "Strava"}
           </button>
         </div>
 
