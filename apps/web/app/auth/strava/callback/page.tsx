@@ -51,7 +51,7 @@ function StravaCallbackContent() {
 
       const data = await res.json();
 
-      // Save Strava connection to user profile
+      // Save Strava tokens
       if (typeof window !== "undefined") {
         localStorage.setItem(
           "planopace_strava_tokens",
@@ -65,13 +65,33 @@ function StravaCallbackContent() {
           })
         );
 
-        // Update user strava status
+        // Update existing user or create session from Strava data
         const storedUser = localStorage.getItem("planopace_user");
         if (storedUser) {
           const user = JSON.parse(storedUser);
           user.strava = true;
           user.stravaAthlete = data.athlete;
           localStorage.setItem("planopace_user", JSON.stringify(user));
+        } else {
+          // Create user session from Strava athlete data
+          const athleteName = `${data.athlete?.firstName || ""} ${data.athlete?.lastName || ""}`.trim() || "Atleta";
+          const newUser = {
+            id: `strava-${data.athlete?.id || Date.now()}`,
+            name: athleteName,
+            email: `strava_${data.athlete?.id}@planopace.com`,
+            role: "user",
+            plan: "Mensal",
+            avatar: athleteName.charAt(0).toUpperCase(),
+            age: 0,
+            weight: 0,
+            pace: "—",
+            vdot: 0,
+            goal: "Definir objetivo",
+            daysPerWeek: 4,
+            strava: true,
+            stravaAthlete: data.athlete,
+          };
+          localStorage.setItem("planopace_user", JSON.stringify(newUser));
         }
       }
 
@@ -81,7 +101,7 @@ function StravaCallbackContent() {
       );
 
       setTimeout(() => {
-        router.push("/perfil");
+        router.push("/dashboard");
       }, 3000);
     } catch (err) {
       setStatus("error");
@@ -136,7 +156,7 @@ function StravaCallbackContent() {
 
           <div className="mt-6 space-y-3">
             {status === "success" && (
-              <p className="text-xs text-gray-500">Redirecionando para o perfil em 3 segundos...</p>
+              <p className="text-xs text-gray-500">Redirecionando para o dashboard em 3 segundos...</p>
             )}
             {status === "error" && (
               <div className="space-y-2">
