@@ -11,8 +11,8 @@ const features = [
   },
   {
     icon: <Smartphone className="w-8 h-8 text-orange-500" />,
-    title: "Integração Strava & Adidas",
-    description: "Conecte seus apps favoritos. Nós puxamos os dados automaticamente para ajustar seu treino em tempo real."
+    title: "Integração com Strava",
+    description: "Conecte seu Strava e nós puxamos os dados automaticamente para ajustar seu treino em tempo real."
   },
   {
     icon: <Activity className="w-8 h-8 text-orange-500" />,
