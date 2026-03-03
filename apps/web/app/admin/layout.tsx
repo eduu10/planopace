@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, CreditCard, FileText, ArrowLeft, Shield, LogOut, Columns3, Image as ImageIcon, Menu, X, Trophy, Key } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, FileText, ArrowLeft, Shield, LogOut, Columns3, Image as ImageIcon, Menu, X, Trophy, Key, Banknote } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/admin/financeiro", label: "Financeiro", icon: CreditCard },
   { href: "/admin/vitorias", label: "Vitórias", icon: Trophy },
   { href: "/admin/galeria", label: "Galeria", icon: ImageIcon },
+  { href: "/admin/asaas", label: "API Asaas", icon: Banknote },
   { href: "/admin/api", label: "API Strava", icon: Key },
 ];
 

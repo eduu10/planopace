@@ -25,6 +25,7 @@ const plans = [
     subtitle: null,
     highlight: false,
     bonus: false,
+    planType: "MONTHLY",
   },
   {
     name: "Semestral",
@@ -33,6 +34,7 @@ const plans = [
     subtitle: "Ganhe 1 mês grátis",
     highlight: true,
     bonus: false,
+    planType: "SEMIANNUAL",
   },
   {
     name: "Anual",
@@ -41,6 +43,7 @@ const plans = [
     subtitle: "Ganhe 2 meses grátis",
     highlight: false,
     bonus: true,
+    planType: "ANNUAL",
   },
 ];
 
@@ -117,7 +120,7 @@ export default function Pricing() {
               </ul>
 
               <Link
-                href="/registro"
+                href={`/checkout?plan=${plan.planType}`}
                 className={`block w-full py-4 rounded-xl font-bold transition-all text-center cursor-pointer ${
                   plan.highlight
                     ? "bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/25"

@@ -37,11 +37,12 @@ model User {
   id               String    @id @default(cuid())
   email            String    @unique
   name             String?
+  cpfCnpj          String?
   image            String?
   passwordHash     String?
   plan             PlanTier  @default(STARTER)
-  stripeCustomerId String?   @unique
-  stripeSubId      String?
+  asaasCustomerId  String?   @unique
+  asaasSubId       String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -51,6 +52,37 @@ model User {
   trainingPlans  TrainingPlan[]
   weeklyPlans    WeeklyPlan[]
   metrics        MetricSnapshot[]
+  payments       Payment[]
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asaasPaymentId  String   @unique
+  billingType     String
+  value           Float
+  status          String
+  invoiceUrl      String?
+  bankSlipUrl     String?
+  pixQrCode       String?
+  pixPayload      String?
+  description     String?
+  externalReference String?
+  dueDate         DateTime
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, status])
+}
+
+model AsaasConfig {
+  id          String   @id @default(cuid())
+  apiKey      String
+  environment String   @default("sandbox")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model AthleteProfile {

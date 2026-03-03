@@ -30,7 +30,7 @@ export default function PrivacidadePage() {
 
           <section>
             <h2 className="text-xl font-bold text-white mb-3">4. Segurança</h2>
-            <p>Utilizamos criptografia em trânsito (HTTPS/TLS) e em repouso para proteger seus dados. Senhas são armazenadas com hash bcrypt. Dados de pagamento são processados diretamente pelo Stripe.</p>
+            <p>Utilizamos criptografia em trânsito (HTTPS/TLS) e em repouso para proteger seus dados. Senhas são armazenadas com hash bcrypt. Dados de pagamento são processados diretamente pelo Asaas.</p>
           </section>
 
           <section>

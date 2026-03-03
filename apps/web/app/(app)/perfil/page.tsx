@@ -215,7 +215,8 @@ export default function PerfilPage() {
           </Link>
         )}
 
-        <button
+        <Link
+          href="/checkout"
           className={`w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors ${isAdmin() ? "border-t border-white/[0.06]" : ""}`}
         >
           <div className="flex items-center gap-3">
@@ -223,7 +224,7 @@ export default function PerfilPage() {
             <span className="text-sm">Gerenciar Assinatura</span>
           </div>
           <ChevronRight className="w-4 h-4 text-gray-600" />
-        </button>
+        </Link>
 
         <button className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors border-t border-white/[0.06]">
           <div className="flex items-center gap-3">

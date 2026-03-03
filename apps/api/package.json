@@ -27,7 +27,6 @@
     "class-transformer": "^0.5.1",
     "bull": "^4.16.0",
     "@anthropic-ai/sdk": "^0.39.0",
-    "stripe": "^17.0.0",
     "resend": "^4.0.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1",
