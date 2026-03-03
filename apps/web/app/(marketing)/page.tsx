@@ -5,6 +5,7 @@ import Features from "@/components/marketing/Features";
 import ShirtPromo from "@/components/marketing/ShirtPromo";
 import HowItWorks from "@/components/marketing/HowItWorks";
 import Pricing from "@/components/marketing/Pricing";
+import DownloadApp from "@/components/marketing/DownloadApp";
 import Testimonials from "@/components/marketing/Testimonials";
 import Brands from "@/components/marketing/Brands";
 import FAQ from "@/components/marketing/FAQ";
@@ -19,6 +20,7 @@ export default function HomePage() {
         <Hero />
         <Marquee />
         <Features />
+        <DownloadApp />
         <ShirtPromo />
         <HowItWorks />
         <Pricing />
