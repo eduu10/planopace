@@ -16,6 +16,58 @@ interface CameraCaptureProps {
   onClose: () => void;
 }
 
+// Component that renders the video feed to a canvas to avoid black screen issues
+function LiveVideoMirror({
+  videoRef,
+  facingMode,
+}: {
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  facingMode: "user" | "environment";
+}) {
+  const mirrorRef = useRef<HTMLCanvasElement>(null);
+  const animFrameRef = useRef<number>(0);
+
+  useEffect(() => {
+    const canvas = mirrorRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const draw = () => {
+      if (video.readyState >= 2) {
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        if (canvas.width !== vw) canvas.width = vw;
+        if (canvas.height !== vh) canvas.height = vh;
+
+        ctx.save();
+        if (facingMode === "user") {
+          ctx.translate(vw, 0);
+          ctx.scale(-1, 1);
+        }
+        ctx.drawImage(video, 0, 0, vw, vh);
+        ctx.restore();
+      }
+      animFrameRef.current = requestAnimationFrame(draw);
+    };
+
+    animFrameRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animFrameRef.current);
+  }, [videoRef, facingMode]);
+
+  return (
+    <canvas
+      ref={mirrorRef}
+      className="w-full h-full object-cover"
+      style={{
+        filter: "contrast(1.3) saturate(1.4) brightness(0.85)",
+      }}
+    />
+  );
+}
+
 const PHRASES = [
   "Corro porque a pizza não vai se queimar sozinha 🍕",
   "Meu pace é lento, mas meu coração é de maratonista 💀",
@@ -54,7 +106,6 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
   const [currentDate, setCurrentDate] = useState("");
   const [phraseIndex, setPhraseIndex] = useState(0);
   const [lastRun, setLastRun] = useState<LastRunData | null>(null);
-  const [videoReady, setVideoReady] = useState(false);
 
   // Fetch last run data from Strava
   useEffect(() => {
@@ -147,7 +198,7 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
   const startCamera = useCallback(
     async (facing: "user" | "environment") => {
       stopStream();
-      setVideoReady(false);
+      setState("requesting");
       try {
         const mediaStream = await navigator.mediaDevices.getUserMedia({
           video: {
@@ -158,14 +209,41 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
           audio: false,
         });
         streamRef.current = mediaStream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-          // Ensure video plays after setting srcObject
+        const video = videoRef.current;
+        if (video) {
+          video.srcObject = mediaStream;
+          // Wait for video metadata to load before playing
+          await new Promise<void>((resolve) => {
+            const onLoaded = () => {
+              video.removeEventListener("loadedmetadata", onLoaded);
+              resolve();
+            };
+            if (video.readyState >= 1) {
+              resolve();
+            } else {
+              video.addEventListener("loadedmetadata", onLoaded);
+            }
+          });
           try {
-            await videoRef.current.play();
+            await video.play();
           } catch {
-            // play() may reject if already playing, that's fine
+            // play() may reject if already playing
           }
+          // Wait for actual first frame to render
+          await new Promise<void>((resolve) => {
+            if (video.readyState >= 3) {
+              resolve();
+            } else {
+              const onPlaying = () => {
+                video.removeEventListener("playing", onPlaying);
+                resolve();
+              };
+              video.addEventListener("playing", onPlaying);
+              // Fallback timeout in case event doesn't fire
+              setTimeout(resolve, 500);
+            }
+          });
+
         }
         setState("streaming");
       } catch {
@@ -185,10 +263,6 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
     return () => stopStream();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const handleVideoPlaying = () => {
-    setVideoReady(true);
-  };
 
   const flipCamera = () => {
     const newMode = facingMode === "user" ? "environment" : "user";
@@ -423,10 +497,10 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
     ctx.fillText("REGISTREI MINHA VITÓRIA!", w / 2, h - bottomH * 0.22);
     ctx.shadowBlur = 0;
 
-    // planopace.com
+    // planopace.vercel.app
     ctx.font = `500 ${Math.round(w * 0.028)}px sans-serif`;
     ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.fillText("planopace.com", w / 2, h - bottomH * 0.06);
+    ctx.fillText("planopace.vercel.app", w / 2, h - bottomH * 0.06);
 
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
@@ -532,32 +606,42 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[60] bg-black flex flex-col"
     >
-      {/* Permission request / denied */}
-      {(state === "requesting" || state === "denied") && (
+      {/* Hidden video element always in DOM so ref is available during camera init */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="hidden"
+      />
+
+      {/* Permission denied */}
+      {state === "denied" && (
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center">
-            {state === "requesting" ? (
-              <>
-                <Camera className="w-12 h-12 text-orange-500 mx-auto mb-4" />
-                <h2 className="text-xl font-bold text-white mb-2">Acessando câmera...</h2>
-                <p className="text-gray-400 text-sm">Permita o acesso à câmera quando solicitado</p>
-              </>
-            ) : (
-              <>
-                <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                <h2 className="text-xl font-bold text-white mb-2">Câmera bloqueada</h2>
-                <p className="text-gray-400 text-sm mb-6">
-                  Permita o acesso à câmera nas configurações do navegador para usar esta
-                  funcionalidade.
-                </p>
-                <button
-                  onClick={onClose}
-                  className="bg-white/10 text-white px-6 py-3 rounded-xl font-medium"
-                >
-                  Voltar
-                </button>
-              </>
-            )}
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-white mb-2">Câmera bloqueada</h2>
+            <p className="text-gray-400 text-sm mb-6">
+              Permita o acesso à câmera nas configurações do navegador para usar esta
+              funcionalidade.
+            </p>
+            <button
+              onClick={onClose}
+              className="bg-white/10 text-white px-6 py-3 rounded-xl font-medium"
+            >
+              Voltar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Loading / requesting camera */}
+      {state === "requesting" && (
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center">
+            <Camera className="w-12 h-12 text-orange-500 mx-auto mb-4 animate-pulse" />
+            <h2 className="text-xl font-bold text-white mb-2">Acessando câmera...</h2>
+            <p className="text-gray-400 text-sm">Permita o acesso à câmera quando solicitado</p>
           </div>
         </div>
       )}
@@ -570,27 +654,11 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
             className="relative flex-1 overflow-hidden"
             onClick={handleTapPhrase}
           >
-            {/* Video feed - radical filter applied via CSS */}
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              onPlaying={handleVideoPlaying}
-              className={`w-full h-full object-cover transition-opacity duration-300 ${
-                videoReady ? "opacity-100" : "opacity-0"
-              } ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
-              style={{
-                filter: "contrast(1.3) saturate(1.4) brightness(0.85)",
-              }}
+            {/* Live video mirror rendered from hidden video via canvas */}
+            <LiveVideoMirror
+              videoRef={videoRef}
+              facingMode={facingMode}
             />
-
-            {/* Loading spinner while video initializes */}
-            {!videoReady && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black">
-                <Camera className="w-10 h-10 text-orange-500 animate-pulse" />
-              </div>
-            )}
 
             {/* Live CSS overlay */}
             <div className="absolute inset-0 pointer-events-none">
@@ -705,7 +773,7 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
                   REGISTREI MINHA VITÓRIA!
                 </p>
                 <p className="text-white/40 text-[2.3vw] sm:text-xs font-medium">
-                  planopace.com
+                  planopace.vercel.app
                 </p>
               </div>
 
