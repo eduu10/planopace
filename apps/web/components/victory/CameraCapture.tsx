@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Camera, RefreshCw, Check, RotateCcw, Trash2, AlertCircle } from "lucide-react";
+import { type FilterType, FILTER_CONFIGS } from "./filters";
 
 type CameraState = "requesting" | "streaming" | "captured" | "denied";
 
@@ -44,7 +45,7 @@ interface LastRunData {
   polyline: string | null;
 }
 
-export type FilterType = "neon" | "ice";
+export type { FilterType };
 
 interface CameraCaptureProps {
   onCapture: (imageData: string) => void;
@@ -53,7 +54,7 @@ interface CameraCaptureProps {
 }
 
 // SVG mini map for polyline preview
-function PolylineMiniMap({ polyline }: { polyline: string }) {
+function PolylineMiniMap({ polyline, accent }: { polyline: string; accent: string }) {
   const points = decodePolyline(polyline);
   if (points.length < 2) return null;
 
@@ -99,11 +100,11 @@ function PolylineMiniMap({ polyline }: { polyline: string }) {
       <path
         d={pathData}
         fill="none"
-        stroke="#FF6B00"
+        stroke={accent}
         strokeWidth="2.5"
         strokeLinecap="round"
         strokeLinejoin="round"
-        style={{ filter: "drop-shadow(0 0 3px #FF6B00)" }}
+        style={{ filter: `drop-shadow(0 0 3px ${accent})` }}
       />
       <circle cx={startX} cy={startY} r="3" fill="#22C55E" />
       <circle cx={endX} cy={endY} r="3" fill="#EF4444" />
@@ -154,43 +155,180 @@ function LiveVideoMirror({
     return () => cancelAnimationFrame(animFrameRef.current);
   }, [videoRef, facingMode]);
 
-  const cssFilter = filterType === "ice"
-    ? "contrast(1.2) saturate(0.6) brightness(1.1) hue-rotate(180deg)"
-    : "contrast(1.3) saturate(1.4) brightness(0.85)";
+  const config = FILTER_CONFIGS[filterType];
 
   return (
     <canvas
       ref={mirrorRef}
       className="w-full h-full object-cover"
-      style={{ filter: cssFilter }}
+      style={{ filter: config.cssFilter }}
     />
   );
 }
-
-const PHRASES = [
-  "Corro porque a pizza não vai se queimar sozinha 🍕",
-  "Meu pace é lento, mas meu coração é de maratonista 💀",
-  "Acordo cedo pra correr. Mentira, acordo cedo e sofro correndo 😭",
-  "Se correr o bicho pega, se ficar o shape não vem 🏃‍♂️",
-  "Treino pesado, cerveja gelada. Equilíbrio é tudo 🍺",
-  "Eu não corro da responsabilidade, eu corro na rua mesmo 🛣️",
-  "Deus me livre, mas quem me dera um sub-4 🙏",
-  "Sofri, chorei, mas o Strava registrou ✅",
-  "Não é sobre velocidade, é sobre não parar no meio 🐢",
-  "Hoje o treino foi tão bom que quase desisti 3 vezes 😅",
-];
 
 function getLastRunFromStrava(): LastRunData | null {
   if (typeof window === "undefined") return null;
   try {
     const stored = localStorage.getItem("planopace_strava_tokens");
     if (!stored) return null;
-    // Try cached activities
     const cached = localStorage.getItem("planopace_last_run");
     if (cached) return JSON.parse(cached);
     return null;
   } catch {
     return null;
+  }
+}
+
+// Apply pixel-level color filter based on filter type
+function applyPixelFilter(data: Uint8ClampedArray, filter: FilterType) {
+  switch (filter) {
+    case "ice": {
+      // Cool tones, desaturated, blue tint
+      for (let i = 0; i < data.length; i += 4) {
+        const factor = 1.2;
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const sat = 0.6;
+        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * sat));
+        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * sat));
+        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * sat));
+        data[i] = Math.max(0, data[i] - 10);
+        data[i + 1] = Math.min(255, data[i + 1] + 5);
+        data[i + 2] = Math.min(255, data[i + 2] + 25);
+      }
+      break;
+    }
+    case "wanted": {
+      // High contrast, desaturated, sepia tint, dark
+      for (let i = 0; i < data.length; i += 4) {
+        const factor = 1.4;
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const sat = 0.3;
+        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * sat));
+        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * sat));
+        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * sat));
+        // Sepia
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        data[i] = Math.min(255, r * 0.9 + g * 0.15 + b * 0.05);
+        data[i + 1] = Math.min(255, r * 0.1 + g * 0.7 + b * 0.05);
+        data[i + 2] = Math.min(255, r * 0.05 + g * 0.1 + b * 0.6);
+        // Darken
+        data[i] = Math.round(data[i] * 0.8);
+        data[i + 1] = Math.round(data[i + 1] * 0.8);
+        data[i + 2] = Math.round(data[i + 2] * 0.8);
+      }
+      break;
+    }
+    case "zen": {
+      // Soft, warm, slightly washed out, golden hour
+      for (let i = 0; i < data.length; i += 4) {
+        const factor = 1.05;
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const sat = 0.8;
+        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * sat));
+        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * sat));
+        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * sat));
+        // Light sepia warmth
+        data[i] = Math.min(255, data[i] + 10);
+        data[i + 1] = Math.min(255, data[i + 1] + 5);
+        data[i + 2] = Math.max(0, data[i + 2] - 8);
+        // Brightness boost
+        data[i] = Math.min(255, Math.round(data[i] * 1.15));
+        data[i + 1] = Math.min(255, Math.round(data[i + 1] * 1.15));
+        data[i + 2] = Math.min(255, Math.round(data[i + 2] * 1.15));
+      }
+      break;
+    }
+    case "night": {
+      // Cyberpunk: high contrast, saturated, purple/green shift, dark
+      for (let i = 0; i < data.length; i += 4) {
+        const factor = 1.4;
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const sat = 1.3;
+        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * sat));
+        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * sat));
+        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * sat));
+        // Purple shift + darken
+        data[i] = Math.min(255, data[i] + 15);
+        data[i + 1] = Math.max(0, data[i + 1] - 10);
+        data[i + 2] = Math.min(255, data[i + 2] + 30);
+        data[i] = Math.round(data[i] * 0.7);
+        data[i + 1] = Math.round(data[i + 1] * 0.7);
+        data[i + 2] = Math.round(data[i + 2] * 0.7);
+      }
+      break;
+    }
+    case "coffee": {
+      // Warm coffee tones, sepia, slightly desaturated, cozy
+      for (let i = 0; i < data.length; i += 4) {
+        const factor = 1.15;
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const sat = 0.9;
+        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * sat));
+        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * sat));
+        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * sat));
+        // Strong sepia
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        data[i] = Math.min(255, r * 0.85 + g * 0.2 + b * 0.05);
+        data[i + 1] = Math.min(255, r * 0.15 + g * 0.75 + b * 0.1);
+        data[i + 2] = Math.min(255, r * 0.05 + g * 0.1 + b * 0.65);
+      }
+      break;
+    }
+    case "military": {
+      // Tactical: desaturated green tint, high contrast, dark
+      for (let i = 0; i < data.length; i += 4) {
+        const factor = 1.3;
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const sat = 0.5;
+        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * sat));
+        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * sat));
+        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * sat));
+        // Green military tint
+        data[i] = Math.max(0, data[i] - 10);
+        data[i + 1] = Math.min(255, data[i + 1] + 8);
+        data[i + 2] = Math.max(0, data[i + 2] - 15);
+        // Darken
+        data[i] = Math.round(data[i] * 0.85);
+        data[i + 1] = Math.round(data[i + 1] * 0.85);
+        data[i + 2] = Math.round(data[i + 2] * 0.85);
+      }
+      break;
+    }
+    default: {
+      // Neon: warm tones, high saturation, dark
+      for (let i = 0; i < data.length; i += 4) {
+        const factor = 1.3;
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const satBoost = 1.35;
+        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * satBoost));
+        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * satBoost));
+        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * satBoost));
+        data[i] = Math.min(255, data[i] + 8);
+        data[i + 2] = Math.max(0, data[i + 2] - 5);
+      }
+      break;
+    }
   }
 }
 
@@ -206,6 +344,10 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
   const [phraseIndex, setPhraseIndex] = useState(0);
   const [lastRun, setLastRun] = useState<LastRunData | null>(null);
 
+  const config = FILTER_CONFIGS[filterType];
+  const accent = config.accent;
+  const phrases = config.phrases;
+
   // Fetch last run data from Strava
   useEffect(() => {
     const cached = getLastRunFromStrava();
@@ -214,7 +356,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
       return;
     }
 
-    // Try fetching from API
     async function fetchLastRun() {
       try {
         const stored = localStorage.getItem("planopace_strava_tokens");
@@ -224,7 +365,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
 
         let accessToken = tokens.accessToken;
 
-        // Refresh token if expired
         if (tokens.expiresAt <= now + 300) {
           const refreshRes = await fetch("/api/strava/refresh", {
             method: "POST",
@@ -312,7 +452,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
         const video = videoRef.current;
         if (video) {
           video.srcObject = mediaStream;
-          // Wait for video metadata to load before playing
           await new Promise<void>((resolve) => {
             const onLoaded = () => {
               video.removeEventListener("loadedmetadata", onLoaded);
@@ -329,7 +468,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
           } catch {
             // play() may reject if already playing
           }
-          // Wait for actual first frame to render
           await new Promise<void>((resolve) => {
             if (video.readyState >= 3) {
               resolve();
@@ -339,11 +477,9 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
                 resolve();
               };
               video.addEventListener("playing", onPlaying);
-              // Fallback timeout in case event doesn't fire
               setTimeout(resolve, 500);
             }
           });
-
         }
         setState("streaming");
       } catch {
@@ -353,7 +489,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     [stopStream]
   );
 
-  // Start camera immediately with front-facing (selfie)
   useEffect(() => {
     if (typeof navigator !== "undefined" && navigator.mediaDevices) {
       startCamera("user");
@@ -371,7 +506,7 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
   };
 
   const handleTapPhrase = () => {
-    setPhraseIndex((prev) => (prev + 1) % PHRASES.length);
+    setPhraseIndex((prev) => (prev + 1) % phrases.length);
   };
 
   const drawOverlay = (
@@ -390,31 +525,47 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     });
     const timeStr = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
-    // Accent color based on filter
-    const accent = filter === "ice" ? "#00D4FF" : "#FF6B00";
-    const accentRgba = filter === "ice" ? "rgba(0,212,255," : "rgba(255,107,0,";
+    const cfg = FILTER_CONFIGS[filter];
+    const accentColor = cfg.accent;
 
-    // === RADICAL DARK FILTER ===
-    // Dark vignette overlay
+    // === DARK VIGNETTE ===
     const vignetteGrad = ctx.createRadialGradient(
       w / 2, h / 2, w * 0.2,
       w / 2, h / 2, w * 0.9
     );
     vignetteGrad.addColorStop(0, "rgba(0,0,0,0)");
-    vignetteGrad.addColorStop(0.6, filter === "ice" ? "rgba(0,10,30,0.3)" : "rgba(0,0,0,0.3)");
-    vignetteGrad.addColorStop(1, filter === "ice" ? "rgba(0,10,30,0.75)" : "rgba(0,0,0,0.7)");
+    vignetteGrad.addColorStop(0.6, cfg.vignetteOuter.replace(/[\d.]+\)$/, "0.3)"));
+    vignetteGrad.addColorStop(1, cfg.vignetteOuter);
     ctx.fillStyle = vignetteGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // Boost contrast/saturation via color overlay blend
+    // Color overlay blend
     ctx.globalCompositeOperation = "overlay";
-    ctx.fillStyle = filter === "ice" ? "rgba(0, 150, 255, 0.1)" : "rgba(255, 100, 0, 0.08)";
+    ctx.fillStyle = cfg.overlayTint;
     ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = "source-over";
 
-    // Subtle grain texture effect via noise overlay
+    // Subtle dark overlay
     ctx.fillStyle = "rgba(0,0,0,0.15)";
     ctx.fillRect(0, 0, w, h);
+
+    // === FILTER-SPECIFIC OVERLAY ELEMENTS ===
+    if (filter === "wanted") {
+      // "PROCURADO" wanted poster style
+      drawWantedOverlay(ctx, w, h, accentColor);
+    } else if (filter === "night") {
+      // Cyberpunk scanlines + grid
+      drawNightOverlay(ctx, w, h, accentColor);
+    } else if (filter === "military") {
+      // Military HUD elements
+      drawMilitaryOverlay(ctx, w, h, accentColor);
+    } else if (filter === "coffee") {
+      // Coffee stamp/frame
+      drawCoffeeOverlay(ctx, w, h, accentColor);
+    } else if (filter === "zen") {
+      // Minimal zen circles
+      drawZenOverlay(ctx, w, h, accentColor);
+    }
 
     // === TOP BAND - Logo ===
     const topH = h * 0.08;
@@ -424,10 +575,10 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     ctx.fillStyle = topGrad;
     ctx.fillRect(0, 0, w, topH + 20);
 
-    // Neon glow line under top
-    ctx.shadowColor = accent;
+    // Accent line under top
+    ctx.shadowColor = accentColor;
     ctx.shadowBlur = 15;
-    ctx.fillStyle = accent;
+    ctx.fillStyle = accentColor;
     ctx.fillRect(0, topH - 3, w, 3);
     ctx.shadowBlur = 0;
 
@@ -438,52 +589,47 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     ctx.textBaseline = "middle";
     const logoY = topH / 2;
 
-    // Neon glow on logo
-    ctx.shadowColor = accent;
+    ctx.shadowColor = accentColor;
     ctx.shadowBlur = 20;
     ctx.fillStyle = "#FFFFFF";
     ctx.fillText("PLANO", w / 2 - ctx.measureText("PACE").width / 2, logoY);
     const planoW = ctx.measureText("PLANO").width;
-    ctx.fillStyle = accent;
+    ctx.fillStyle = accentColor;
     ctx.fillText("PACE", w / 2 + planoW / 2, logoY);
     ctx.shadowBlur = 0;
 
-    // Small date/time under logo
+    // Date/time
     const smallSize = Math.round(w * 0.025);
     ctx.font = `500 ${smallSize}px monospace`;
     ctx.fillStyle = "rgba(255,255,255,0.5)";
     ctx.textAlign = "center";
     ctx.fillText(`${dateStr}  •  ${timeStr}`, w / 2, topH + 14);
 
-    // === CORNER NEON BRACKETS ===
+    // === CORNER BRACKETS ===
     const margin = w * 0.05;
     const topOffset = h * 0.13;
     const bottomOffset = h * 0.72;
     const cornerLen = w * 0.1;
-    ctx.strokeStyle = accent;
+    ctx.strokeStyle = accentColor;
     ctx.lineWidth = 3;
-    ctx.shadowColor = accent;
+    ctx.shadowColor = accentColor;
     ctx.shadowBlur = 10;
 
-    // Top-left
     ctx.beginPath();
     ctx.moveTo(margin, topOffset + cornerLen);
     ctx.lineTo(margin, topOffset);
     ctx.lineTo(margin + cornerLen, topOffset);
     ctx.stroke();
-    // Top-right
     ctx.beginPath();
     ctx.moveTo(w - margin - cornerLen, topOffset);
     ctx.lineTo(w - margin, topOffset);
     ctx.lineTo(w - margin, topOffset + cornerLen);
     ctx.stroke();
-    // Bottom-left
     ctx.beginPath();
     ctx.moveTo(margin, bottomOffset - cornerLen);
     ctx.lineTo(margin, bottomOffset);
     ctx.lineTo(margin + cornerLen, bottomOffset);
     ctx.stroke();
-    // Bottom-right
     ctx.beginPath();
     ctx.moveTo(w - margin - cornerLen, bottomOffset);
     ctx.lineTo(w - margin, bottomOffset);
@@ -491,12 +637,10 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // === LAST RUN DATA - Right side middle ===
+    // === LAST RUN DATA ===
     if (runData) {
       const labelSize = Math.round(w * 0.025);
       const valueSize = Math.round(w * 0.042);
-
-      // Calculate pill height based on whether we have a map
       const hasMap = !!runData.polyline;
       const pillW = w * 0.32;
       const dataSectionH = h * 0.08;
@@ -505,7 +649,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
       const pillX = w * 0.95 - pillW;
       const pillY = h * 0.44;
 
-      // Rounded rect background
       ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
       ctx.beginPath();
       const radius = 12;
@@ -521,21 +664,18 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
       ctx.closePath();
       ctx.fill();
 
-      // Left neon accent bar
-      ctx.fillStyle = accent;
-      ctx.shadowColor = accent;
+      ctx.fillStyle = accentColor;
+      ctx.shadowColor = accentColor;
       ctx.shadowBlur = 8;
       ctx.fillRect(pillX, pillY + 6, 3, pillH - 12);
       ctx.shadowBlur = 0;
 
-      // "ÚLTIMA CORRIDA" header
       const headerSize = Math.round(w * 0.02);
       ctx.font = `700 ${headerSize}px sans-serif`;
-      ctx.fillStyle = accent;
+      ctx.fillStyle = accentColor;
       ctx.textAlign = "left";
       ctx.fillText("ÚLTIMA CORRIDA", pillX + 14, pillY + 18);
 
-      // Pace
       ctx.font = `600 ${labelSize}px sans-serif`;
       ctx.fillStyle = "rgba(255,255,255,0.6)";
       ctx.fillText("PACE", pillX + 14, pillY + dataSectionH * 0.48);
@@ -543,7 +683,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
       ctx.fillStyle = "#FFFFFF";
       ctx.fillText(runData.pace, pillX + 14, pillY + dataSectionH * 0.48 + valueSize + 2);
 
-      // Distance
       const distX = pillX + pillW * 0.55;
       ctx.font = `600 ${labelSize}px sans-serif`;
       ctx.fillStyle = "rgba(255,255,255,0.6)";
@@ -552,7 +691,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
       ctx.fillStyle = "#FFFFFF";
       ctx.fillText(runData.distance, distX, pillY + dataSectionH * 0.48 + valueSize + 2);
 
-      // === MAP POLYLINE ===
       if (hasMap && runData.polyline) {
         const points = decodePolyline(runData.polyline);
         if (points.length > 1) {
@@ -562,7 +700,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
           const mapW = pillW - mapPad * 2;
           const mapH = mapSectionH - 6;
 
-          // Find bounds
           let minLat = Infinity, maxLat = -Infinity;
           let minLng = Infinity, maxLng = -Infinity;
           for (const [lat, lng] of points) {
@@ -574,7 +711,7 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
 
           const latRange = maxLat - minLat || 0.001;
           const lngRange = maxLng - minLng || 0.001;
-          const pad = 0.1; // 10% padding
+          const pad = 0.1;
           const adjMinLat = minLat - latRange * pad;
           const adjMaxLat = maxLat + latRange * pad;
           const adjMinLng = minLng - lngRange * pad;
@@ -582,7 +719,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
           const adjLatRange = adjMaxLat - adjMinLat;
           const adjLngRange = adjMaxLng - adjMinLng;
 
-          // Draw route
           ctx.beginPath();
           for (let i = 0; i < points.length; i++) {
             const px = mapX + ((points[i][1] - adjMinLng) / adjLngRange) * mapW;
@@ -590,14 +726,13 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
             if (i === 0) ctx.moveTo(px, py);
             else ctx.lineTo(px, py);
           }
-          ctx.strokeStyle = accent;
+          ctx.strokeStyle = accentColor;
           ctx.lineWidth = 2.5;
-          ctx.shadowColor = accent;
+          ctx.shadowColor = accentColor;
           ctx.shadowBlur = 6;
           ctx.stroke();
           ctx.shadowBlur = 0;
 
-          // Start dot (green)
           const startPx = mapX + ((points[0][1] - adjMinLng) / adjLngRange) * mapW;
           const startPy = mapY + (1 - (points[0][0] - adjMinLat) / adjLatRange) * mapH;
           ctx.beginPath();
@@ -605,7 +740,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
           ctx.fillStyle = "#22C55E";
           ctx.fill();
 
-          // End dot (red)
           const endIdx = points.length - 1;
           const endPx = mapX + ((points[endIdx][1] - adjMinLng) / adjLngRange) * mapW;
           const endPy = mapY + (1 - (points[endIdx][0] - adjMinLat) / adjLatRange) * mapH;
@@ -617,7 +751,7 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
       }
     }
 
-    // === BOTTOM BAND - Phrase ===
+    // === BOTTOM BAND ===
     const bottomH = h * 0.2;
     const bottomY = h - bottomH;
     const bottomGrad = ctx.createLinearGradient(0, bottomY - 30, 0, h);
@@ -632,10 +766,9 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     ctx.font = `800 italic ${phraseSize}px sans-serif`;
     ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "center";
-    ctx.shadowColor = accent;
+    ctx.shadowColor = accentColor;
     ctx.shadowBlur = 6;
 
-    // Word wrap the phrase
     const maxLineW = w * 0.85;
     const words = phrase.split(" ");
     const lines: string[] = [];
@@ -658,11 +791,11 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     }
     ctx.shadowBlur = 0;
 
-    // "REGISTREI MINHA VITÓRIA!" with neon glow
+    // "REGISTREI MINHA VITÓRIA!"
     const titleSize = Math.round(w * 0.05);
     ctx.font = `900 ${titleSize}px sans-serif`;
-    ctx.fillStyle = accent;
-    ctx.shadowColor = accent;
+    ctx.fillStyle = accentColor;
+    ctx.shadowColor = accentColor;
     ctx.shadowBlur = 15;
     ctx.textAlign = "center";
     ctx.fillText("REGISTREI MINHA VITÓRIA!", w / 2, h - bottomH * 0.22);
@@ -677,6 +810,173 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     ctx.textBaseline = "alphabetic";
   };
 
+  // === FILTER-SPECIFIC OVERLAY DRAWERS ===
+
+  function drawWantedOverlay(ctx: CanvasRenderingContext2D, w: number, h: number, accentColor: string) {
+    // "PROCURADO" text at top of photo area
+    const fontSize = Math.round(w * 0.12);
+    ctx.save();
+    ctx.font = `900 ${fontSize}px serif`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = accentColor;
+    ctx.globalAlpha = 0.15;
+    ctx.fillText("PROCURADO", w / 2, h * 0.38);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Torn paper edges (top and bottom rough lines)
+    ctx.save();
+    ctx.strokeStyle = "rgba(180,50,20,0.15)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let x = 0; x < w; x += 8) {
+      const y = h * 0.12 + Math.sin(x * 0.05) * 4 + Math.random() * 3;
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    for (let x = 0; x < w; x += 8) {
+      const y = h * 0.73 + Math.sin(x * 0.07) * 4 + Math.random() * 3;
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawNightOverlay(ctx: CanvasRenderingContext2D, w: number, h: number, accentColor: string) {
+    // Horizontal scanlines
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    ctx.fillStyle = accentColor;
+    for (let y = 0; y < h; y += 4) {
+      ctx.fillRect(0, y, w, 1);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Perspective grid at bottom
+    ctx.save();
+    ctx.strokeStyle = accentColor;
+    ctx.globalAlpha = 0.08;
+    ctx.lineWidth = 1;
+    const gridY = h * 0.65;
+    for (let i = 0; i < 8; i++) {
+      const y = gridY + i * (h * 0.04);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+    for (let i = 0; i < 10; i++) {
+      const x = w * 0.1 + i * (w * 0.08);
+      ctx.beginPath();
+      ctx.moveTo(w / 2, gridY);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function drawMilitaryOverlay(ctx: CanvasRenderingContext2D, w: number, h: number, accentColor: string) {
+    // Crosshair in center
+    ctx.save();
+    ctx.strokeStyle = accentColor;
+    ctx.globalAlpha = 0.15;
+    ctx.lineWidth = 1;
+    const cx = w / 2;
+    const cy = h * 0.42;
+    const cr = w * 0.08;
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - cr * 1.3, cy);
+    ctx.lineTo(cx - cr * 0.4, cy);
+    ctx.moveTo(cx + cr * 0.4, cy);
+    ctx.lineTo(cx + cr * 1.3, cy);
+    ctx.moveTo(cx, cy - cr * 1.3);
+    ctx.lineTo(cx, cy - cr * 0.4);
+    ctx.moveTo(cx, cy + cr * 0.4);
+    ctx.lineTo(cx, cy + cr * 1.3);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Coordinate markers
+    ctx.save();
+    const coordSize = Math.round(w * 0.02);
+    ctx.font = `600 ${coordSize}px monospace`;
+    ctx.fillStyle = accentColor;
+    ctx.globalAlpha = 0.25;
+    ctx.textAlign = "left";
+    ctx.fillText("LAT -23.5505", w * 0.05, h * 0.1);
+    ctx.fillText("LNG -46.6333", w * 0.05, h * 0.1 + coordSize + 4);
+    ctx.textAlign = "right";
+    ctx.fillText("STATUS: ATIVO", w * 0.95, h * 0.1);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function drawCoffeeOverlay(ctx: CanvasRenderingContext2D, w: number, h: number, accentColor: string) {
+    // Coffee ring stain (circle)
+    ctx.save();
+    ctx.strokeStyle = accentColor;
+    ctx.globalAlpha = 0.08;
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.arc(w * 0.15, h * 0.2, w * 0.08, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Kraft paper grain - subtle dots
+    ctx.save();
+    ctx.globalAlpha = 0.03;
+    ctx.fillStyle = accentColor;
+    for (let i = 0; i < 200; i++) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
+      ctx.beginPath();
+      ctx.arc(x, y, Math.random() * 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function drawZenOverlay(ctx: CanvasRenderingContext2D, w: number, h: number, accentColor: string) {
+    // Zen circle (enso)
+    ctx.save();
+    ctx.strokeStyle = accentColor;
+    ctx.globalAlpha = 0.1;
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(w / 2, h * 0.42, w * 0.15, -Math.PI * 0.1, Math.PI * 1.7);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Thin horizontal line decorations
+    ctx.save();
+    ctx.strokeStyle = accentColor;
+    ctx.globalAlpha = 0.08;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.1, h * 0.15);
+    ctx.lineTo(w * 0.4, h * 0.15);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.6, h * 0.15);
+    ctx.lineTo(w * 0.9, h * 0.15);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
   const capturePhoto = async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -687,7 +987,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
 
     await document.fonts.ready;
 
-    // Force 9:16 story format (1080x1920)
     const targetW = 1080;
     const targetH = 1920;
     canvas.width = targetW;
@@ -696,8 +995,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     const vw = video.videoWidth;
     const vh = video.videoHeight;
 
-    // Fit full video into 9:16 canvas without zoom
-    // Letterbox/pillarbox: fill background black, then draw video scaled to fit
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, targetW, targetH);
 
@@ -707,20 +1004,17 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     let drawW: number, drawH: number, drawX: number, drawY: number;
 
     if (videoRatio > targetRatio) {
-      // Video wider than target — fit by width, center vertically
       drawW = targetW;
       drawH = targetW / videoRatio;
       drawX = 0;
       drawY = (targetH - drawH) / 2;
     } else {
-      // Video taller than target — fit by height, center horizontally
       drawH = targetH;
       drawW = targetH * videoRatio;
       drawX = (targetW - drawW) / 2;
       drawY = 0;
     }
 
-    // Draw video frame (mirror if selfie)
     if (facingMode === "user") {
       ctx.save();
       ctx.translate(targetW, 0);
@@ -731,53 +1025,13 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
       ctx.drawImage(video, 0, 0, vw, vh, drawX, drawY, drawW, drawH);
     }
 
-    // Apply color filter on canvas pixels based on filter type
+    // Apply pixel filter
     const imageData = ctx.getImageData(0, 0, targetW, targetH);
-    const data = imageData.data;
-
-    if (filterType === "ice") {
-      // ICE filter: cool tones, desaturated, blue tint, high brightness
-      for (let i = 0; i < data.length; i += 4) {
-        // Increase contrast slightly
-        const factor = 1.2;
-        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
-        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
-        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
-
-        // Desaturate
-        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        const satBoost = 0.6;
-        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * satBoost));
-        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * satBoost));
-        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * satBoost));
-
-        // Cool blue tint + brightness boost
-        data[i] = Math.max(0, data[i] - 10);        // R reduce
-        data[i + 1] = Math.min(255, data[i + 1] + 5); // G slight boost
-        data[i + 2] = Math.min(255, data[i + 2] + 25); // B strong boost
-      }
-    } else {
-      // NEON filter: warm tones, high saturation, dark
-      for (let i = 0; i < data.length; i += 4) {
-        const factor = 1.3;
-        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
-        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
-        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
-
-        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        const satBoost = 1.35;
-        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * satBoost));
-        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * satBoost));
-        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * satBoost));
-
-        data[i] = Math.min(255, data[i] + 8);
-        data[i + 2] = Math.max(0, data[i + 2] - 5);
-      }
-    }
+    applyPixelFilter(imageData.data, filterType);
     ctx.putImageData(imageData, 0, 0);
 
     // Draw overlay
-    drawOverlay(ctx, targetW, targetH, PHRASES[phraseIndex], lastRun, filterType);
+    drawOverlay(ctx, targetW, targetH, phrases[phraseIndex], lastRun, filterType);
 
     const imgData = canvas.toDataURL("image/jpeg", 0.85);
     setCapturedImage(imgData);
@@ -796,6 +1050,8 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     }
   };
 
+  const accentGlow = `${config.accentGlow}0.4)`;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -803,7 +1059,7 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[60] bg-black flex flex-col"
     >
-      {/* Hidden video element always in DOM so ref is available during camera init */}
+      {/* Hidden video element always in DOM */}
       <video
         ref={videoRef}
         autoPlay
@@ -832,11 +1088,11 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
         </div>
       )}
 
-      {/* Loading / requesting camera */}
+      {/* Loading */}
       {state === "requesting" && (
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center">
-            <Camera className="w-12 h-12 text-orange-500 mx-auto mb-4 animate-pulse" />
+            <Camera className="w-12 h-12 mx-auto mb-4 animate-pulse" style={{ color: accent }} />
             <h2 className="text-xl font-bold text-white mb-2">Acessando câmera...</h2>
             <p className="text-gray-400 text-sm">Permita o acesso à câmera quando solicitado</p>
           </div>
@@ -846,12 +1102,10 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
       {/* Live camera */}
       {state === "streaming" && (
         <>
-          {/* Tap area for phrase change */}
           <div
             className="relative flex-1 overflow-hidden"
             onClick={handleTapPhrase}
           >
-            {/* Live video mirror rendered from hidden video via canvas */}
             <LiveVideoMirror
               videoRef={videoRef}
               facingMode={facingMode}
@@ -860,17 +1114,55 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
 
             {/* Live CSS overlay */}
             <div className="absolute inset-0 pointer-events-none">
-              {/* Dark vignette via CSS */}
+              {/* Vignette */}
               <div
                 className="absolute inset-0"
                 style={{
-                  background: filterType === "ice"
-                    ? "radial-gradient(circle at center, transparent 20%, rgba(0,10,30,0.3) 60%, rgba(0,10,30,0.75) 100%)"
-                    : "radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.3) 60%, rgba(0,0,0,0.7) 100%)",
+                  background: `radial-gradient(circle at center, transparent 20%, ${config.vignetteOuter.replace(/[\d.]+\)$/, "0.3)")} 60%, ${config.vignetteOuter} 100%)`,
                 }}
               />
 
-              {/* Top band with gradient fade */}
+              {/* Filter-specific live overlays */}
+              {filterType === "night" && (
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    backgroundImage: `repeating-linear-gradient(0deg, ${accent}08 0px, transparent 1px, transparent 4px)`,
+                  }}
+                />
+              )}
+              {filterType === "wanted" && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{ pointerEvents: "none" }}
+                >
+                  <span
+                    className="text-[15vw] font-black opacity-[0.06] tracking-widest"
+                    style={{ fontFamily: "serif", color: accent }}
+                  >
+                    PROCURADO
+                  </span>
+                </div>
+              )}
+              {filterType === "zen" && (
+                <div className="absolute inset-0 flex items-center justify-center" style={{ pointerEvents: "none" }}>
+                  <div
+                    className="rounded-full border-[3px] opacity-[0.08]"
+                    style={{ width: "30vw", height: "30vw", borderColor: accent }}
+                  />
+                </div>
+              )}
+              {filterType === "military" && (
+                <div className="absolute inset-0 flex items-center justify-center" style={{ pointerEvents: "none" }}>
+                  <div className="relative opacity-[0.12]" style={{ width: "16vw", height: "16vw" }}>
+                    <div className="absolute rounded-full border-[2px]" style={{ inset: 0, borderColor: accent }} />
+                    <div className="absolute top-1/2 left-0 right-0 h-[1px]" style={{ backgroundColor: accent }} />
+                    <div className="absolute left-1/2 top-0 bottom-0 w-[1px]" style={{ backgroundColor: accent }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Top band */}
               <div
                 className="absolute top-0 left-0 right-0 flex flex-col items-center justify-center pt-3 pb-6"
                 style={{
@@ -880,28 +1172,26 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
               >
                 <span
                   className="text-[5vw] sm:text-2xl font-black italic tracking-tight"
-                  style={{ textShadow: `0 0 20px ${filterType === "ice" ? "#00D4FF" : "#FF6B00"}` }}
+                  style={{ textShadow: `0 0 20px ${accent}` }}
                 >
-                  PLANO<span style={{ color: filterType === "ice" ? "#00D4FF" : "#FF6B00" }}>PACE</span>
+                  PLANO<span style={{ color: accent }}>PACE</span>
                 </span>
                 <span className="text-[2.2vw] sm:text-xs text-white/50 font-mono mt-0.5">
                   {currentDate} &bull; {currentTime}
                 </span>
               </div>
 
-              {/* Neon glow line */}
+              {/* Accent glow line */}
               <div
                 className="absolute left-0 right-0 h-[3px]"
                 style={{
                   top: "8.5%",
-                  backgroundColor: filterType === "ice" ? "#00D4FF" : "#FF6B00",
-                  boxShadow: filterType === "ice"
-                    ? "0 0 15px #00D4FF, 0 0 30px #00D4FF"
-                    : "0 0 15px #FF6B00, 0 0 30px #FF6B00",
+                  backgroundColor: accent,
+                  boxShadow: `0 0 15px ${accent}, 0 0 30px ${accent}`,
                 }}
               />
 
-              {/* Corner neon brackets */}
+              {/* Corner brackets */}
               {[
                 { pos: "top-[12%] left-[5%]", border: "border-l-[3px] border-t-[3px]", shadow: "inset 8px 8px 15px -10px" },
                 { pos: "top-[12%] right-[5%]", border: "border-r-[3px] border-t-[3px]", shadow: "inset -8px 8px 15px -10px" },
@@ -912,13 +1202,13 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
                   key={i}
                   className={`absolute ${c.pos} w-[10%] aspect-square ${c.border}`}
                   style={{
-                    borderColor: filterType === "ice" ? "#00D4FF" : "#FF6B00",
-                    boxShadow: `${c.shadow} ${filterType === "ice" ? "#00D4FF" : "#FF6B00"}`,
+                    borderColor: accent,
+                    boxShadow: `${c.shadow} ${accent}`,
                   }}
                 />
               ))}
 
-              {/* Last run data - right side middle */}
+              {/* Last run data */}
               {lastRun && (
                 <div
                   className="absolute right-[3%] flex flex-col items-end"
@@ -927,13 +1217,13 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
                   <div
                     className="bg-black/65 backdrop-blur-sm rounded-xl px-3 py-2.5 border-l-[3px]"
                     style={{
-                      borderColor: filterType === "ice" ? "#00D4FF" : "#FF6B00",
-                      boxShadow: `0 0 10px ${filterType === "ice" ? "rgba(0,212,255,0.2)" : "rgba(255,107,0,0.2)"}`,
+                      borderColor: accent,
+                      boxShadow: `0 0 10px ${config.accentGlow}0.2)`,
                     }}
                   >
                     <p
                       className="text-[2vw] sm:text-[10px] font-bold tracking-wider mb-1.5"
-                      style={{ color: filterType === "ice" ? "#00D4FF" : "#FF6B00" }}
+                      style={{ color: accent }}
                     >
                       ÚLTIMA CORRIDA
                     </p>
@@ -948,13 +1238,13 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
                       </div>
                     </div>
                     {lastRun.polyline && (
-                      <PolylineMiniMap polyline={lastRun.polyline} />
+                      <PolylineMiniMap polyline={lastRun.polyline} accent={accent} />
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Bottom band with phrase */}
+              {/* Bottom band */}
               <div
                 className="absolute bottom-0 left-0 right-0 flex flex-col items-center justify-end pb-4 pt-10"
                 style={{
@@ -962,7 +1252,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
                   background: "linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.7) 60%, transparent)",
                 }}
               >
-                {/* Motivational phrase */}
                 <AnimatePresence mode="wait">
                   <motion.p
                     key={phraseIndex}
@@ -971,18 +1260,17 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.25 }}
                     className="text-[3.5vw] sm:text-base font-extrabold italic text-white text-center px-6 mb-3 leading-tight"
-                    style={{ textShadow: `0 0 8px ${filterType === "ice" ? "rgba(0,212,255,0.4)" : "rgba(255,107,0,0.4)"}` }}
+                    style={{ textShadow: `0 0 8px ${config.accentGlow}0.4)` }}
                   >
-                    {PHRASES[phraseIndex]}
+                    {phrases[phraseIndex]}
                   </motion.p>
                 </AnimatePresence>
 
-                {/* Title */}
                 <p
                   className="text-[4.5vw] sm:text-xl font-black tracking-tight mb-1"
                   style={{
-                    color: filterType === "ice" ? "#00D4FF" : "#FF6B00",
-                    textShadow: `0 0 20px ${filterType === "ice" ? "#00D4FF" : "#FF6B00"}`,
+                    color: accent,
+                    textShadow: `0 0 20px ${accent}`,
                   }}
                 >
                   REGISTREI MINHA VITÓRIA!
@@ -1010,11 +1298,11 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
               onClick={capturePhoto}
               className="w-[72px] h-[72px] rounded-full border-4 flex items-center justify-center active:scale-95 transition-transform"
               style={{
-                borderColor: filterType === "ice" ? "#00D4FF" : "#FF6B00",
-                boxShadow: `0 0 20px ${filterType === "ice" ? "rgba(0,212,255,0.4)" : "rgba(255,107,0,0.4)"}`,
+                borderColor: accent,
+                boxShadow: `0 0 20px ${accentGlow}`,
               }}
             >
-              <div className="w-[58px] h-[58px] rounded-full" style={{ backgroundColor: filterType === "ice" ? "#00D4FF" : "#FF6B00" }} />
+              <div className="w-[58px] h-[58px] rounded-full" style={{ backgroundColor: accent }} />
             </button>
             <button onClick={flipCamera} className="p-3 rounded-full bg-white/10 text-white">
               <RefreshCw className="w-6 h-6" />
@@ -1034,7 +1322,6 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
             />
           </div>
 
-          {/* Preview controls */}
           <div className="bg-black p-6">
             <div className="flex items-center justify-center gap-4">
               <button
@@ -1058,8 +1345,8 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
                 onClick={save}
                 className="flex items-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-bold transition-colors"
                 style={{
-                  backgroundColor: filterType === "ice" ? "#00D4FF" : "#FF6B00",
-                  boxShadow: `0 0 15px ${filterType === "ice" ? "rgba(0,212,255,0.4)" : "rgba(255,107,0,0.4)"}`,
+                  backgroundColor: accent,
+                  boxShadow: `0 0 15px ${accentGlow}`,
                 }}
               >
                 <Check className="w-4 h-4" />
