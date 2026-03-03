@@ -44,9 +44,12 @@ interface LastRunData {
   polyline: string | null;
 }
 
+export type FilterType = "neon" | "ice";
+
 interface CameraCaptureProps {
   onCapture: (imageData: string) => void;
   onClose: () => void;
+  filterType?: FilterType;
 }
 
 // SVG mini map for polyline preview
@@ -112,9 +115,11 @@ function PolylineMiniMap({ polyline }: { polyline: string }) {
 function LiveVideoMirror({
   videoRef,
   facingMode,
+  filterType = "neon",
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   facingMode: "user" | "environment";
+  filterType?: FilterType;
 }) {
   const mirrorRef = useRef<HTMLCanvasElement>(null);
   const animFrameRef = useRef<number>(0);
@@ -149,13 +154,15 @@ function LiveVideoMirror({
     return () => cancelAnimationFrame(animFrameRef.current);
   }, [videoRef, facingMode]);
 
+  const cssFilter = filterType === "ice"
+    ? "contrast(1.2) saturate(0.6) brightness(1.1) hue-rotate(180deg)"
+    : "contrast(1.3) saturate(1.4) brightness(0.85)";
+
   return (
     <canvas
       ref={mirrorRef}
       className="w-full h-full object-cover"
-      style={{
-        filter: "contrast(1.3) saturate(1.4) brightness(0.85)",
-      }}
+      style={{ filter: cssFilter }}
     />
   );
 }
@@ -187,7 +194,7 @@ function getLastRunFromStrava(): LastRunData | null {
   }
 }
 
-export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
+export default function CameraCapture({ onCapture, onClose, filterType = "neon" }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -372,7 +379,8 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
     w: number,
     h: number,
     phrase: string,
-    runData: LastRunData | null
+    runData: LastRunData | null,
+    filter: FilterType = "neon"
   ) => {
     const now = new Date();
     const dateStr = now.toLocaleDateString("pt-BR", {
@@ -382,6 +390,10 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
     });
     const timeStr = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
+    // Accent color based on filter
+    const accent = filter === "ice" ? "#00D4FF" : "#FF6B00";
+    const accentRgba = filter === "ice" ? "rgba(0,212,255," : "rgba(255,107,0,";
+
     // === RADICAL DARK FILTER ===
     // Dark vignette overlay
     const vignetteGrad = ctx.createRadialGradient(
@@ -389,14 +401,14 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
       w / 2, h / 2, w * 0.9
     );
     vignetteGrad.addColorStop(0, "rgba(0,0,0,0)");
-    vignetteGrad.addColorStop(0.6, "rgba(0,0,0,0.3)");
-    vignetteGrad.addColorStop(1, "rgba(0,0,0,0.7)");
+    vignetteGrad.addColorStop(0.6, filter === "ice" ? "rgba(0,10,30,0.3)" : "rgba(0,0,0,0.3)");
+    vignetteGrad.addColorStop(1, filter === "ice" ? "rgba(0,10,30,0.75)" : "rgba(0,0,0,0.7)");
     ctx.fillStyle = vignetteGrad;
     ctx.fillRect(0, 0, w, h);
 
     // Boost contrast/saturation via color overlay blend
     ctx.globalCompositeOperation = "overlay";
-    ctx.fillStyle = "rgba(255, 100, 0, 0.08)";
+    ctx.fillStyle = filter === "ice" ? "rgba(0, 150, 255, 0.1)" : "rgba(255, 100, 0, 0.08)";
     ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = "source-over";
 
@@ -412,10 +424,10 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
     ctx.fillStyle = topGrad;
     ctx.fillRect(0, 0, w, topH + 20);
 
-    // Neon orange glow line under top
-    ctx.shadowColor = "#FF6B00";
+    // Neon glow line under top
+    ctx.shadowColor = accent;
     ctx.shadowBlur = 15;
-    ctx.fillStyle = "#FF6B00";
+    ctx.fillStyle = accent;
     ctx.fillRect(0, topH - 3, w, 3);
     ctx.shadowBlur = 0;
 
@@ -427,12 +439,12 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
     const logoY = topH / 2;
 
     // Neon glow on logo
-    ctx.shadowColor = "#FF6B00";
+    ctx.shadowColor = accent;
     ctx.shadowBlur = 20;
     ctx.fillStyle = "#FFFFFF";
     ctx.fillText("PLANO", w / 2 - ctx.measureText("PACE").width / 2, logoY);
     const planoW = ctx.measureText("PLANO").width;
-    ctx.fillStyle = "#FF6B00";
+    ctx.fillStyle = accent;
     ctx.fillText("PACE", w / 2 + planoW / 2, logoY);
     ctx.shadowBlur = 0;
 
@@ -448,9 +460,9 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
     const topOffset = h * 0.13;
     const bottomOffset = h * 0.72;
     const cornerLen = w * 0.1;
-    ctx.strokeStyle = "#FF6B00";
+    ctx.strokeStyle = accent;
     ctx.lineWidth = 3;
-    ctx.shadowColor = "#FF6B00";
+    ctx.shadowColor = accent;
     ctx.shadowBlur = 10;
 
     // Top-left
@@ -510,8 +522,8 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
       ctx.fill();
 
       // Left neon accent bar
-      ctx.fillStyle = "#FF6B00";
-      ctx.shadowColor = "#FF6B00";
+      ctx.fillStyle = accent;
+      ctx.shadowColor = accent;
       ctx.shadowBlur = 8;
       ctx.fillRect(pillX, pillY + 6, 3, pillH - 12);
       ctx.shadowBlur = 0;
@@ -519,7 +531,7 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
       // "ÚLTIMA CORRIDA" header
       const headerSize = Math.round(w * 0.02);
       ctx.font = `700 ${headerSize}px sans-serif`;
-      ctx.fillStyle = "#FF6B00";
+      ctx.fillStyle = accent;
       ctx.textAlign = "left";
       ctx.fillText("ÚLTIMA CORRIDA", pillX + 14, pillY + 18);
 
@@ -578,9 +590,9 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
             if (i === 0) ctx.moveTo(px, py);
             else ctx.lineTo(px, py);
           }
-          ctx.strokeStyle = "#FF6B00";
+          ctx.strokeStyle = accent;
           ctx.lineWidth = 2.5;
-          ctx.shadowColor = "#FF6B00";
+          ctx.shadowColor = accent;
           ctx.shadowBlur = 6;
           ctx.stroke();
           ctx.shadowBlur = 0;
@@ -620,7 +632,7 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
     ctx.font = `800 italic ${phraseSize}px sans-serif`;
     ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "center";
-    ctx.shadowColor = "#FF6B00";
+    ctx.shadowColor = accent;
     ctx.shadowBlur = 6;
 
     // Word wrap the phrase
@@ -649,8 +661,8 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
     // "REGISTREI MINHA VITÓRIA!" with neon glow
     const titleSize = Math.round(w * 0.05);
     ctx.font = `900 ${titleSize}px sans-serif`;
-    ctx.fillStyle = "#FF6B00";
-    ctx.shadowColor = "#FF6B00";
+    ctx.fillStyle = accent;
+    ctx.shadowColor = accent;
     ctx.shadowBlur = 15;
     ctx.textAlign = "center";
     ctx.fillText("REGISTREI MINHA VITÓRIA!", w / 2, h - bottomH * 0.22);
@@ -719,31 +731,53 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
       ctx.drawImage(video, 0, 0, vw, vh, drawX, drawY, drawW, drawH);
     }
 
-    // Apply radical color filter on canvas pixels
+    // Apply color filter on canvas pixels based on filter type
     const imageData = ctx.getImageData(0, 0, targetW, targetH);
     const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      // Increase contrast
-      const factor = 1.3;
-      data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));       // R
-      data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128)); // G
-      data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128)); // B
 
-      // Boost saturation - shift towards vivid
-      const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      const satBoost = 1.35;
-      data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * satBoost));
-      data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * satBoost));
-      data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * satBoost));
+    if (filterType === "ice") {
+      // ICE filter: cool tones, desaturated, blue tint, high brightness
+      for (let i = 0; i < data.length; i += 4) {
+        // Increase contrast slightly
+        const factor = 1.2;
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
 
-      // Slight warm tint
-      data[i] = Math.min(255, data[i] + 8);       // R boost
-      data[i + 2] = Math.max(0, data[i + 2] - 5); // B reduce
+        // Desaturate
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const satBoost = 0.6;
+        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * satBoost));
+        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * satBoost));
+        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * satBoost));
+
+        // Cool blue tint + brightness boost
+        data[i] = Math.max(0, data[i] - 10);        // R reduce
+        data[i + 1] = Math.min(255, data[i + 1] + 5); // G slight boost
+        data[i + 2] = Math.min(255, data[i + 2] + 25); // B strong boost
+      }
+    } else {
+      // NEON filter: warm tones, high saturation, dark
+      for (let i = 0; i < data.length; i += 4) {
+        const factor = 1.3;
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
+
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const satBoost = 1.35;
+        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * satBoost));
+        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * satBoost));
+        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * satBoost));
+
+        data[i] = Math.min(255, data[i] + 8);
+        data[i + 2] = Math.max(0, data[i + 2] - 5);
+      }
     }
     ctx.putImageData(imageData, 0, 0);
 
     // Draw overlay
-    drawOverlay(ctx, targetW, targetH, PHRASES[phraseIndex], lastRun);
+    drawOverlay(ctx, targetW, targetH, PHRASES[phraseIndex], lastRun, filterType);
 
     const imgData = canvas.toDataURL("image/jpeg", 0.85);
     setCapturedImage(imgData);
@@ -821,6 +855,7 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
             <LiveVideoMirror
               videoRef={videoRef}
               facingMode={facingMode}
+              filterType={filterType}
             />
 
             {/* Live CSS overlay */}
@@ -829,8 +864,9 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
               <div
                 className="absolute inset-0"
                 style={{
-                  background:
-                    "radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.3) 60%, rgba(0,0,0,0.7) 100%)",
+                  background: filterType === "ice"
+                    ? "radial-gradient(circle at center, transparent 20%, rgba(0,10,30,0.3) 60%, rgba(0,10,30,0.75) 100%)"
+                    : "radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.3) 60%, rgba(0,0,0,0.7) 100%)",
                 }}
               />
 
@@ -844,9 +880,9 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
               >
                 <span
                   className="text-[5vw] sm:text-2xl font-black italic tracking-tight"
-                  style={{ textShadow: "0 0 20px #FF6B00" }}
+                  style={{ textShadow: `0 0 20px ${filterType === "ice" ? "#00D4FF" : "#FF6B00"}` }}
                 >
-                  PLANO<span className="text-[#FF6B00]">PACE</span>
+                  PLANO<span style={{ color: filterType === "ice" ? "#00D4FF" : "#FF6B00" }}>PACE</span>
                 </span>
                 <span className="text-[2.2vw] sm:text-xs text-white/50 font-mono mt-0.5">
                   {currentDate} &bull; {currentTime}
@@ -855,27 +891,32 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
 
               {/* Neon glow line */}
               <div
-                className="absolute left-0 right-0 h-[3px] bg-[#FF6B00]"
-                style={{ top: "8.5%", boxShadow: "0 0 15px #FF6B00, 0 0 30px #FF6B00" }}
+                className="absolute left-0 right-0 h-[3px]"
+                style={{
+                  top: "8.5%",
+                  backgroundColor: filterType === "ice" ? "#00D4FF" : "#FF6B00",
+                  boxShadow: filterType === "ice"
+                    ? "0 0 15px #00D4FF, 0 0 30px #00D4FF"
+                    : "0 0 15px #FF6B00, 0 0 30px #FF6B00",
+                }}
               />
 
               {/* Corner neon brackets */}
-              <div
-                className="absolute top-[12%] left-[5%] w-[10%] aspect-square border-l-[3px] border-t-[3px] border-[#FF6B00]"
-                style={{ boxShadow: "inset 8px 8px 15px -10px #FF6B00" }}
-              />
-              <div
-                className="absolute top-[12%] right-[5%] w-[10%] aspect-square border-r-[3px] border-t-[3px] border-[#FF6B00]"
-                style={{ boxShadow: "inset -8px 8px 15px -10px #FF6B00" }}
-              />
-              <div
-                className="absolute bottom-[28%] left-[5%] w-[10%] aspect-square border-l-[3px] border-b-[3px] border-[#FF6B00]"
-                style={{ boxShadow: "inset 8px -8px 15px -10px #FF6B00" }}
-              />
-              <div
-                className="absolute bottom-[28%] right-[5%] w-[10%] aspect-square border-r-[3px] border-b-[3px] border-[#FF6B00]"
-                style={{ boxShadow: "inset -8px -8px 15px -10px #FF6B00" }}
-              />
+              {[
+                { pos: "top-[12%] left-[5%]", border: "border-l-[3px] border-t-[3px]", shadow: "inset 8px 8px 15px -10px" },
+                { pos: "top-[12%] right-[5%]", border: "border-r-[3px] border-t-[3px]", shadow: "inset -8px 8px 15px -10px" },
+                { pos: "bottom-[28%] left-[5%]", border: "border-l-[3px] border-b-[3px]", shadow: "inset 8px -8px 15px -10px" },
+                { pos: "bottom-[28%] right-[5%]", border: "border-r-[3px] border-b-[3px]", shadow: "inset -8px -8px 15px -10px" },
+              ].map((c, i) => (
+                <div
+                  key={i}
+                  className={`absolute ${c.pos} w-[10%] aspect-square ${c.border}`}
+                  style={{
+                    borderColor: filterType === "ice" ? "#00D4FF" : "#FF6B00",
+                    boxShadow: `${c.shadow} ${filterType === "ice" ? "#00D4FF" : "#FF6B00"}`,
+                  }}
+                />
+              ))}
 
               {/* Last run data - right side middle */}
               {lastRun && (
@@ -883,10 +924,17 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
                   className="absolute right-[3%] flex flex-col items-end"
                   style={{ top: "42%" }}
                 >
-                  <div className="bg-black/65 backdrop-blur-sm rounded-xl px-3 py-2.5 border-l-[3px] border-[#FF6B00]"
-                    style={{ boxShadow: "0 0 10px rgba(255,107,0,0.2)" }}
+                  <div
+                    className="bg-black/65 backdrop-blur-sm rounded-xl px-3 py-2.5 border-l-[3px]"
+                    style={{
+                      borderColor: filterType === "ice" ? "#00D4FF" : "#FF6B00",
+                      boxShadow: `0 0 10px ${filterType === "ice" ? "rgba(0,212,255,0.2)" : "rgba(255,107,0,0.2)"}`,
+                    }}
                   >
-                    <p className="text-[2vw] sm:text-[10px] font-bold text-[#FF6B00] tracking-wider mb-1.5">
+                    <p
+                      className="text-[2vw] sm:text-[10px] font-bold tracking-wider mb-1.5"
+                      style={{ color: filterType === "ice" ? "#00D4FF" : "#FF6B00" }}
+                    >
                       ÚLTIMA CORRIDA
                     </p>
                     <div className="flex gap-3">
@@ -899,7 +947,6 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
                         <p className="text-[3.2vw] sm:text-sm font-extrabold text-white">{lastRun.distance}</p>
                       </div>
                     </div>
-                    {/* Mini map polyline */}
                     {lastRun.polyline && (
                       <PolylineMiniMap polyline={lastRun.polyline} />
                     )}
@@ -924,7 +971,7 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.25 }}
                     className="text-[3.5vw] sm:text-base font-extrabold italic text-white text-center px-6 mb-3 leading-tight"
-                    style={{ textShadow: "0 0 8px rgba(255,107,0,0.4)" }}
+                    style={{ textShadow: `0 0 8px ${filterType === "ice" ? "rgba(0,212,255,0.4)" : "rgba(255,107,0,0.4)"}` }}
                   >
                     {PHRASES[phraseIndex]}
                   </motion.p>
@@ -932,8 +979,11 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
 
                 {/* Title */}
                 <p
-                  className="text-[4.5vw] sm:text-xl font-black text-[#FF6B00] tracking-tight mb-1"
-                  style={{ textShadow: "0 0 20px #FF6B00" }}
+                  className="text-[4.5vw] sm:text-xl font-black tracking-tight mb-1"
+                  style={{
+                    color: filterType === "ice" ? "#00D4FF" : "#FF6B00",
+                    textShadow: `0 0 20px ${filterType === "ice" ? "#00D4FF" : "#FF6B00"}`,
+                  }}
                 >
                   REGISTREI MINHA VITÓRIA!
                 </p>
@@ -958,10 +1008,13 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
             </button>
             <button
               onClick={capturePhoto}
-              className="w-[72px] h-[72px] rounded-full border-4 border-[#FF6B00] flex items-center justify-center active:scale-95 transition-transform"
-              style={{ boxShadow: "0 0 20px rgba(255,107,0,0.4)" }}
+              className="w-[72px] h-[72px] rounded-full border-4 flex items-center justify-center active:scale-95 transition-transform"
+              style={{
+                borderColor: filterType === "ice" ? "#00D4FF" : "#FF6B00",
+                boxShadow: `0 0 20px ${filterType === "ice" ? "rgba(0,212,255,0.4)" : "rgba(255,107,0,0.4)"}`,
+              }}
             >
-              <div className="w-[58px] h-[58px] rounded-full bg-[#FF6B00]" />
+              <div className="w-[58px] h-[58px] rounded-full" style={{ backgroundColor: filterType === "ice" ? "#00D4FF" : "#FF6B00" }} />
             </button>
             <button onClick={flipCamera} className="p-3 rounded-full bg-white/10 text-white">
               <RefreshCw className="w-6 h-6" />
@@ -1003,8 +1056,11 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
               </button>
               <button
                 onClick={save}
-                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-[#FF6B00] hover:bg-orange-600 text-white text-sm font-bold transition-colors"
-                style={{ boxShadow: "0 0 15px rgba(255,107,0,0.4)" }}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-bold transition-colors"
+                style={{
+                  backgroundColor: filterType === "ice" ? "#00D4FF" : "#FF6B00",
+                  boxShadow: `0 0 15px ${filterType === "ice" ? "rgba(0,212,255,0.4)" : "rgba(255,107,0,0.4)"}`,
+                }}
               >
                 <Check className="w-4 h-4" />
                 Salvar

@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Trophy, X, Download } from "lucide-react";
+import { Camera, Trophy, X, Download, Flame, Snowflake } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useVictories, type VictoryPhoto } from "@/stores/victories";
-import CameraCapture from "@/components/victory/CameraCapture";
+import CameraCapture, { type FilterType } from "@/components/victory/CameraCapture";
 import VictoryCard from "@/components/victory/VictoryCard";
 
 export default function VitoriasPage() {
   const { user } = useAuth();
   const { victories, hydrate, addVictory, deleteVictory } = useVictories();
   const [showCamera, setShowCamera] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState<FilterType | null>(null);
   const [preview, setPreview] = useState<VictoryPhoto | null>(null);
   const [saveError, setSaveError] = useState(false);
+  const [showHint, setShowHint] = useState(false);
 
   useEffect(() => {
     hydrate();
@@ -34,6 +36,15 @@ export default function VitoriasPage() {
       setTimeout(() => setSaveError(false), 4000);
     }
     setShowCamera(false);
+  };
+
+  const handleRegister = () => {
+    if (!selectedFilter) {
+      setShowHint(true);
+      setTimeout(() => setShowHint(false), 2500);
+      return;
+    }
+    setShowCamera(true);
   };
 
   const handleDownload = (v: VictoryPhoto) => {
@@ -58,12 +69,108 @@ export default function VitoriasPage() {
         </div>
       </div>
 
+      {/* Filter Selection */}
+      <div className="mb-4">
+        <p className="text-sm font-semibold text-gray-300 mb-3">Escolha um filtro</p>
+        <div className="flex gap-4 justify-center">
+          {/* Neon Filter */}
+          <button
+            onClick={() => setSelectedFilter("neon")}
+            className={`flex flex-col items-center gap-2 transition-all ${
+              selectedFilter === "neon" ? "scale-105" : "opacity-60 hover:opacity-80"
+            }`}
+          >
+            <div
+              className={`w-20 h-20 rounded-full overflow-hidden relative border-[3px] transition-all ${
+                selectedFilter === "neon"
+                  ? "border-[#FF6B00] shadow-[0_0_20px_rgba(255,107,0,0.5)]"
+                  : "border-gray-600"
+              }`}
+            >
+              {/* Neon filter preview design */}
+              <div className="w-full h-full bg-gradient-to-br from-gray-900 via-orange-950 to-gray-900 flex items-center justify-center relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-transparent via-orange-500/10 to-transparent" />
+                <Flame className="w-7 h-7 text-[#FF6B00] relative z-10" style={{ filter: "drop-shadow(0 0 6px #FF6B00)" }} />
+                {/* Corner brackets mini */}
+                <div className="absolute top-1.5 left-1.5 w-3 h-3 border-l-2 border-t-2 border-[#FF6B00]/60" />
+                <div className="absolute top-1.5 right-1.5 w-3 h-3 border-r-2 border-t-2 border-[#FF6B00]/60" />
+                <div className="absolute bottom-1.5 left-1.5 w-3 h-3 border-l-2 border-b-2 border-[#FF6B00]/60" />
+                <div className="absolute bottom-1.5 right-1.5 w-3 h-3 border-r-2 border-b-2 border-[#FF6B00]/60" />
+              </div>
+            </div>
+            <span className={`text-xs font-bold ${selectedFilter === "neon" ? "text-[#FF6B00]" : "text-gray-500"}`}>
+              Neon Fire
+            </span>
+          </button>
+
+          {/* Ice Filter */}
+          <button
+            onClick={() => setSelectedFilter("ice")}
+            className={`flex flex-col items-center gap-2 transition-all ${
+              selectedFilter === "ice" ? "scale-105" : "opacity-60 hover:opacity-80"
+            }`}
+          >
+            <div
+              className={`w-20 h-20 rounded-full overflow-hidden relative border-[3px] transition-all ${
+                selectedFilter === "ice"
+                  ? "border-[#00D4FF] shadow-[0_0_20px_rgba(0,212,255,0.5)]"
+                  : "border-gray-600"
+              }`}
+            >
+              {/* Ice filter preview design */}
+              <div className="w-full h-full bg-gradient-to-br from-gray-900 via-cyan-950 to-gray-900 flex items-center justify-center relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-transparent via-cyan-400/10 to-transparent" />
+                <Snowflake className="w-7 h-7 text-[#00D4FF] relative z-10" style={{ filter: "drop-shadow(0 0 6px #00D4FF)" }} />
+                {/* Corner brackets mini */}
+                <div className="absolute top-1.5 left-1.5 w-3 h-3 border-l-2 border-t-2 border-[#00D4FF]/60" />
+                <div className="absolute top-1.5 right-1.5 w-3 h-3 border-r-2 border-t-2 border-[#00D4FF]/60" />
+                <div className="absolute bottom-1.5 left-1.5 w-3 h-3 border-l-2 border-b-2 border-[#00D4FF]/60" />
+                <div className="absolute bottom-1.5 right-1.5 w-3 h-3 border-r-2 border-b-2 border-[#00D4FF]/60" />
+              </div>
+            </div>
+            <span className={`text-xs font-bold ${selectedFilter === "ice" ? "text-[#00D4FF]" : "text-gray-500"}`}>
+              Ice Cold
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Hint message */}
+      <AnimatePresence>
+        {showHint && (
+          <motion.div
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            className="text-center text-sm text-amber-400 mb-3 font-medium"
+          >
+            Escolha um filtro acima para continuar!
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Capture Button */}
       <motion.button
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        onClick={() => setShowCamera(true)}
-        className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl p-5 flex items-center justify-center gap-3 font-bold text-lg mb-6 active:scale-[0.98] transition-transform"
+        onClick={handleRegister}
+        className={`w-full rounded-2xl p-5 flex items-center justify-center gap-3 font-bold text-lg mb-6 active:scale-[0.98] transition-all ${
+          selectedFilter
+            ? "text-white"
+            : "bg-gray-700/50 text-gray-500 cursor-default"
+        }`}
+        style={
+          selectedFilter
+            ? {
+                background: selectedFilter === "ice"
+                  ? "linear-gradient(to right, #00B4D8, #00D4FF)"
+                  : "linear-gradient(to right, #EA580C, #F97316)",
+                boxShadow: selectedFilter === "ice"
+                  ? "0 0 20px rgba(0,212,255,0.3)"
+                  : "0 0 20px rgba(255,107,0,0.3)",
+              }
+            : undefined
+        }
       >
         <Camera className="w-6 h-6" />
         Registrar Vitória
@@ -103,10 +210,11 @@ export default function VitoriasPage() {
 
       {/* Camera Modal */}
       <AnimatePresence>
-        {showCamera && (
+        {showCamera && selectedFilter && (
           <CameraCapture
             onCapture={handleCapture}
             onClose={() => setShowCamera(false)}
+            filterType={selectedFilter}
           />
         )}
       </AnimatePresence>
