@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { Download, Smartphone, Zap, Activity, BarChart3 } from "lucide-react";
 
-const APK_URL = "https://expo.dev/artifacts/eas/jUkYdrSGcJuSm1GuvVmeiY.apk";
+const APK_URL = "https://expo.dev/artifacts/eas/828P6WjzqSszPyQ8Vp6CHt.apk";
 
 export default function DownloadApp() {
   return (
@@ -13,60 +13,13 @@ export default function DownloadApp() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          {/* Coluna 1 - Texto */}
+          {/* Coluna 1 - Mockup (agora à esquerda) */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <span className="inline-block text-orange-500 font-bold text-sm uppercase tracking-widest mb-4">
-              Novo
-            </span>
-            <h2 className="text-3xl md:text-5xl font-black text-white mb-4 leading-tight">
-              Seu treino no{" "}
-              <span className="text-orange-500">bolso.</span>
-            </h2>
-            <p className="text-gray-400 text-lg mb-6 leading-relaxed">
-              Baixe o app do Plano Pace e tenha acesso ao seu plano de treino,
-              métricas de evolução e sincronização com Strava direto no seu celular.
-            </p>
-
-            <div className="space-y-4 mb-10">
-              {[
-                { icon: Zap, text: "Treinos diários com notificações" },
-                { icon: Activity, text: "Sync automático com Strava" },
-                { icon: BarChart3, text: "Métricas de evolução em tempo real" },
-              ].map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-5 h-5 text-orange-500" />
-                  </div>
-                  <span className="text-gray-300">{text}</span>
-                </div>
-              ))}
-            </div>
-
-            <a
-              href={APK_URL}
-              download
-              className="inline-flex items-center gap-3 bg-orange-500 hover:bg-orange-600 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 shadow-lg shadow-orange-500/25"
-            >
-              <Download className="w-6 h-6" />
-              Baixar para Android
-            </a>
-            <p className="text-gray-500 text-sm mt-3">
-              APK v1.0.0 &middot; Android 8.0+
-            </p>
-          </motion.div>
-
-          {/* Coluna 2 - Mockup do App */}
-          <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="flex justify-center lg:justify-end"
+            className="flex justify-center lg:justify-start order-2 lg:order-1"
           >
             <div className="relative">
               {/* Glow effect */}
@@ -93,11 +46,9 @@ export default function DownloadApp() {
 
                   {/* App content mockup */}
                   <div className="px-4 pb-4">
-                    {/* Greeting */}
                     <p className="text-gray-400 text-[10px] mb-0.5">Bom dia</p>
                     <h3 className="text-white font-bold text-sm mb-3">Vamos treinar!</h3>
 
-                    {/* Stats grid */}
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       <div className="bg-zinc-800/80 rounded-xl p-2.5">
                         <p className="text-[9px] text-gray-400">Distância</p>
@@ -111,7 +62,6 @@ export default function DownloadApp() {
                       </div>
                     </div>
 
-                    {/* Today's workout */}
                     <div className="bg-gradient-to-r from-orange-500/20 to-orange-600/10 rounded-xl p-3 border border-orange-500/20 mb-3">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-orange-400 text-[10px] font-bold uppercase">Treino de Hoje</span>
@@ -121,7 +71,6 @@ export default function DownloadApp() {
                       <p className="text-gray-400 text-[10px]">Recuperação: 200m trote</p>
                     </div>
 
-                    {/* Mini chart */}
                     <div className="bg-zinc-800/80 rounded-xl p-3">
                       <p className="text-[10px] text-gray-400 mb-2">Evolução Semanal</p>
                       <div className="flex items-end gap-1 h-12">
@@ -168,6 +117,55 @@ export default function DownloadApp() {
               </div>
             </div>
           </motion.div>
+
+          {/* Coluna 2 - Texto (agora à direita) */}
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="order-1 lg:order-2"
+          >
+            <span className="inline-block text-orange-500 font-bold text-sm uppercase tracking-widest mb-4">
+              Novo
+            </span>
+            <h2 className="text-3xl md:text-5xl font-black text-white mb-4 leading-tight">
+              Seu treino no{" "}
+              <span className="text-orange-500">bolso.</span>
+            </h2>
+            <p className="text-gray-400 text-lg mb-6 leading-relaxed">
+              Baixe o app do Plano Pace e tenha acesso ao seu plano de treino,
+              métricas de evolução e sincronização com Strava direto no seu celular.
+            </p>
+
+            <div className="space-y-4 mb-10">
+              {[
+                { icon: Zap, text: "Treinos diários com notificações" },
+                { icon: Activity, text: "Sync automático com Strava" },
+                { icon: BarChart3, text: "Métricas de evolução em tempo real" },
+              ].map(({ icon: Icon, text }) => (
+                <div key={text} className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-5 h-5 text-orange-500" />
+                  </div>
+                  <span className="text-gray-300">{text}</span>
+                </div>
+              ))}
+            </div>
+
+            <a
+              href={APK_URL}
+              download
+              className="inline-flex items-center gap-3 bg-orange-500 hover:bg-orange-600 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 shadow-lg shadow-orange-500/25"
+            >
+              <Download className="w-6 h-6" />
+              Baixar para Android
+            </a>
+            <p className="text-gray-500 text-sm mt-3">
+              APK v1.0.0 &middot; Android 8.0+
+            </p>
+          </motion.div>
+
         </div>
       </div>
     </section>
