@@ -6,14 +6,106 @@ import { X, Camera, RefreshCw, Check, RotateCcw, Trash2, AlertCircle } from "luc
 
 type CameraState = "requesting" | "streaming" | "captured" | "denied";
 
+// Decode Google encoded polyline to lat/lng array
+function decodePolyline(encoded: string): Array<[number, number]> {
+  const points: Array<[number, number]> = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte: number;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
+
+    shift = 0;
+    result = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lng += result & 1 ? ~(result >> 1) : result >> 1;
+
+    points.push([lat / 1e5, lng / 1e5]);
+  }
+  return points;
+}
+
 interface LastRunData {
   pace: string;
   distance: string;
+  polyline: string | null;
 }
 
 interface CameraCaptureProps {
   onCapture: (imageData: string) => void;
   onClose: () => void;
+}
+
+// SVG mini map for polyline preview
+function PolylineMiniMap({ polyline }: { polyline: string }) {
+  const points = decodePolyline(polyline);
+  if (points.length < 2) return null;
+
+  let minLat = Infinity, maxLat = -Infinity;
+  let minLng = Infinity, maxLng = -Infinity;
+  for (const [lat, lng] of points) {
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+  }
+
+  const latRange = maxLat - minLat || 0.001;
+  const lngRange = maxLng - minLng || 0.001;
+  const pad = 0.1;
+  const aMinLat = minLat - latRange * pad;
+  const aMaxLat = maxLat + latRange * pad;
+  const aMinLng = minLng - lngRange * pad;
+  const aMaxLng = maxLng + lngRange * pad;
+  const aLatRange = aMaxLat - aMinLat;
+  const aLngRange = aMaxLng - aMinLng;
+
+  const svgSize = 100;
+  const pathData = points
+    .map((p, i) => {
+      const x = ((p[1] - aMinLng) / aLngRange) * svgSize;
+      const y = (1 - (p[0] - aMinLat) / aLatRange) * svgSize;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  const startX = ((points[0][1] - aMinLng) / aLngRange) * svgSize;
+  const startY = (1 - (points[0][0] - aMinLat) / aLatRange) * svgSize;
+  const endX = ((points[points.length - 1][1] - aMinLng) / aLngRange) * svgSize;
+  const endY = (1 - (points[points.length - 1][0] - aMinLat) / aLatRange) * svgSize;
+
+  return (
+    <svg
+      viewBox={`-4 -4 ${svgSize + 8} ${svgSize + 8}`}
+      className="w-full mt-2"
+      style={{ aspectRatio: "1", maxHeight: "25vw" }}
+    >
+      <path
+        d={pathData}
+        fill="none"
+        stroke="#FF6B00"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ filter: "drop-shadow(0 0 3px #FF6B00)" }}
+      />
+      <circle cx={startX} cy={startY} r="3" fill="#22C55E" />
+      <circle cx={endX} cy={endY} r="3" fill="#EF4444" />
+    </svg>
+  );
 }
 
 // Component that renders the video feed to a canvas to avoid black screen issues
@@ -161,6 +253,7 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
           const data: LastRunData = {
             pace: `${mins}:${secs.toString().padStart(2, "0")}/km`,
             distance: `${(run.distance / 1000).toFixed(1)}km`,
+            polyline: run.map?.summary_polyline || null,
           };
           setLastRun(data);
           localStorage.setItem("planopace_last_run", JSON.stringify(data));
@@ -203,8 +296,8 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
         const mediaStream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: facing },
-            width: { ideal: 1080 },
-            height: { ideal: 1920 },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
           },
           audio: false,
         });
@@ -388,18 +481,20 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
 
     // === LAST RUN DATA - Right side middle ===
     if (runData) {
-      const dataX = w * 0.95;
-      const dataY = h * 0.48;
       const labelSize = Math.round(w * 0.025);
       const valueSize = Math.round(w * 0.042);
 
-      // Semi-transparent dark background pill
-      const pillW = w * 0.3;
-      const pillH = h * 0.1;
-      const pillX = dataX - pillW;
-      const pillY = dataY - pillH * 0.3;
+      // Calculate pill height based on whether we have a map
+      const hasMap = !!runData.polyline;
+      const pillW = w * 0.32;
+      const dataSectionH = h * 0.08;
+      const mapSectionH = hasMap ? w * 0.28 : 0;
+      const pillH = dataSectionH + mapSectionH + (hasMap ? 14 : 0);
+      const pillX = w * 0.95 - pillW;
+      const pillY = h * 0.44;
 
-      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+      // Rounded rect background
+      ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
       ctx.beginPath();
       const radius = 12;
       ctx.moveTo(pillX + radius, pillY);
@@ -431,19 +526,83 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
       // Pace
       ctx.font = `600 ${labelSize}px sans-serif`;
       ctx.fillStyle = "rgba(255,255,255,0.6)";
-      ctx.fillText("PACE", pillX + 14, pillY + pillH * 0.48);
+      ctx.fillText("PACE", pillX + 14, pillY + dataSectionH * 0.48);
       ctx.font = `800 ${valueSize}px sans-serif`;
       ctx.fillStyle = "#FFFFFF";
-      ctx.fillText(runData.pace, pillX + 14, pillY + pillH * 0.48 + valueSize + 2);
+      ctx.fillText(runData.pace, pillX + 14, pillY + dataSectionH * 0.48 + valueSize + 2);
 
       // Distance
       const distX = pillX + pillW * 0.55;
       ctx.font = `600 ${labelSize}px sans-serif`;
       ctx.fillStyle = "rgba(255,255,255,0.6)";
-      ctx.fillText("DIST", distX, pillY + pillH * 0.48);
+      ctx.fillText("DIST", distX, pillY + dataSectionH * 0.48);
       ctx.font = `800 ${valueSize}px sans-serif`;
       ctx.fillStyle = "#FFFFFF";
-      ctx.fillText(runData.distance, distX, pillY + pillH * 0.48 + valueSize + 2);
+      ctx.fillText(runData.distance, distX, pillY + dataSectionH * 0.48 + valueSize + 2);
+
+      // === MAP POLYLINE ===
+      if (hasMap && runData.polyline) {
+        const points = decodePolyline(runData.polyline);
+        if (points.length > 1) {
+          const mapPad = 10;
+          const mapX = pillX + mapPad;
+          const mapY = pillY + dataSectionH + 6;
+          const mapW = pillW - mapPad * 2;
+          const mapH = mapSectionH - 6;
+
+          // Find bounds
+          let minLat = Infinity, maxLat = -Infinity;
+          let minLng = Infinity, maxLng = -Infinity;
+          for (const [lat, lng] of points) {
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+            if (lng < minLng) minLng = lng;
+            if (lng > maxLng) maxLng = lng;
+          }
+
+          const latRange = maxLat - minLat || 0.001;
+          const lngRange = maxLng - minLng || 0.001;
+          const pad = 0.1; // 10% padding
+          const adjMinLat = minLat - latRange * pad;
+          const adjMaxLat = maxLat + latRange * pad;
+          const adjMinLng = minLng - lngRange * pad;
+          const adjMaxLng = maxLng + lngRange * pad;
+          const adjLatRange = adjMaxLat - adjMinLat;
+          const adjLngRange = adjMaxLng - adjMinLng;
+
+          // Draw route
+          ctx.beginPath();
+          for (let i = 0; i < points.length; i++) {
+            const px = mapX + ((points[i][1] - adjMinLng) / adjLngRange) * mapW;
+            const py = mapY + (1 - (points[i][0] - adjMinLat) / adjLatRange) * mapH;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.strokeStyle = "#FF6B00";
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = "#FF6B00";
+          ctx.shadowBlur = 6;
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+
+          // Start dot (green)
+          const startPx = mapX + ((points[0][1] - adjMinLng) / adjLngRange) * mapW;
+          const startPy = mapY + (1 - (points[0][0] - adjMinLat) / adjLatRange) * mapH;
+          ctx.beginPath();
+          ctx.arc(startPx, startPy, 4, 0, Math.PI * 2);
+          ctx.fillStyle = "#22C55E";
+          ctx.fill();
+
+          // End dot (red)
+          const endIdx = points.length - 1;
+          const endPx = mapX + ((points[endIdx][1] - adjMinLng) / adjLngRange) * mapW;
+          const endPy = mapY + (1 - (points[endIdx][0] - adjMinLat) / adjLatRange) * mapH;
+          ctx.beginPath();
+          ctx.arc(endPx, endPy, 4, 0, Math.PI * 2);
+          ctx.fillStyle = "#EF4444";
+          ctx.fill();
+        }
+      }
     }
 
     // === BOTTOM BAND - Phrase ===
@@ -525,24 +684,28 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
     const vw = video.videoWidth;
     const vh = video.videoHeight;
 
-    // Calculate crop to fit 9:16 with less zoom (show more of the scene)
-    const targetRatio = targetW / targetH; // 0.5625
-    const videoRatio = vw / vh;
+    // Fit full video into 9:16 canvas without zoom
+    // Letterbox/pillarbox: fill background black, then draw video scaled to fit
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, targetW, targetH);
 
-    let sx: number, sy: number, sw: number, sh: number;
+    const videoRatio = vw / vh;
+    const targetRatio = targetW / targetH;
+
+    let drawW: number, drawH: number, drawX: number, drawY: number;
 
     if (videoRatio > targetRatio) {
-      // Video is wider - crop sides
-      sh = vh;
-      sw = vh * targetRatio;
-      sx = (vw - sw) / 2;
-      sy = 0;
+      // Video wider than target — fit by width, center vertically
+      drawW = targetW;
+      drawH = targetW / videoRatio;
+      drawX = 0;
+      drawY = (targetH - drawH) / 2;
     } else {
-      // Video is taller - crop top/bottom
-      sw = vw;
-      sh = vw / targetRatio;
-      sx = 0;
-      sy = (vh - sh) / 2;
+      // Video taller than target — fit by height, center horizontally
+      drawH = targetH;
+      drawW = targetH * videoRatio;
+      drawX = (targetW - drawW) / 2;
+      drawY = 0;
     }
 
     // Draw video frame (mirror if selfie)
@@ -550,10 +713,10 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
       ctx.save();
       ctx.translate(targetW, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, targetW, targetH);
+      ctx.drawImage(video, 0, 0, vw, vh, drawX, drawY, drawW, drawH);
       ctx.restore();
     } else {
-      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, targetW, targetH);
+      ctx.drawImage(video, 0, 0, vw, vh, drawX, drawY, drawW, drawH);
     }
 
     // Apply radical color filter on canvas pixels
@@ -718,14 +881,12 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
               {lastRun && (
                 <div
                   className="absolute right-[3%] flex flex-col items-end"
-                  style={{ top: "45%" }}
+                  style={{ top: "42%" }}
                 >
-                  <div className="bg-black/60 backdrop-blur-sm rounded-xl px-3 py-2.5 border-l-[3px] border-[#FF6B00]"
+                  <div className="bg-black/65 backdrop-blur-sm rounded-xl px-3 py-2.5 border-l-[3px] border-[#FF6B00]"
                     style={{ boxShadow: "0 0 10px rgba(255,107,0,0.2)" }}
                   >
-                    <p
-                      className="text-[2vw] sm:text-[10px] font-bold text-[#FF6B00] tracking-wider mb-1.5"
-                    >
+                    <p className="text-[2vw] sm:text-[10px] font-bold text-[#FF6B00] tracking-wider mb-1.5">
                       ÚLTIMA CORRIDA
                     </p>
                     <div className="flex gap-3">
@@ -738,6 +899,10 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
                         <p className="text-[3.2vw] sm:text-sm font-extrabold text-white">{lastRun.distance}</p>
                       </div>
                     </div>
+                    {/* Mini map polyline */}
+                    {lastRun.polyline && (
+                      <PolylineMiniMap polyline={lastRun.polyline} />
+                    )}
                   </div>
                 </div>
               )}
