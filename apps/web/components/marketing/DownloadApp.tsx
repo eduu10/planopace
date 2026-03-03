@@ -19,7 +19,7 @@ export default function DownloadApp() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="flex justify-center lg:justify-start order-2 lg:order-1"
+            className="flex justify-center lg:justify-start"
           >
             <div className="relative">
               {/* Glow effect */}
@@ -124,7 +124,7 @@ export default function DownloadApp() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="order-1 lg:order-2"
+            className=""
           >
             <span className="inline-block text-orange-500 font-bold text-sm uppercase tracking-widest mb-4">
               Novo
