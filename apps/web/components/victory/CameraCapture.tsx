@@ -312,6 +312,21 @@ function applyPixelFilter(data: Uint8ClampedArray, filter: FilterType) {
       }
       break;
     }
+    case "landscape": {
+      // Landscape: minimal manipulation, slight contrast + saturation boost
+      for (let i = 0; i < data.length; i += 4) {
+        const factor = 1.05;
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128));
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128));
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128));
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const sat = 1.1;
+        data[i] = Math.min(255, Math.max(0, avg + (data[i] - avg) * sat));
+        data[i + 1] = Math.min(255, Math.max(0, avg + (data[i + 1] - avg) * sat));
+        data[i + 2] = Math.min(255, Math.max(0, avg + (data[i + 2] - avg) * sat));
+      }
+      break;
+    }
     default: {
       // Neon: warm tones, high saturation, dark
       for (let i = 0; i < data.length; i += 4) {
@@ -612,6 +627,10 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     }
     if (filter === "military") {
       drawMilitaryFullOverlay(ctx, w, h, phrase, runData);
+      return;
+    }
+    if (filter === "landscape") {
+      drawLandscapeFullOverlay(ctx, w, h, runData);
       return;
     }
 
@@ -1430,6 +1449,107 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
     ctx.textBaseline = "alphabetic";
   }
 
+  // ========== LANDSCAPE (clean, minimal — logo top + data bottom) ==========
+  function drawLandscapeFullOverlay(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    runData: LastRunData | null
+  ) {
+    // Subtle bottom gradient for readability
+    const botGrad = ctx.createLinearGradient(0, h * 0.7, 0, h);
+    botGrad.addColorStop(0, "rgba(0,0,0,0)");
+    botGrad.addColorStop(0.5, "rgba(0,0,0,0.3)");
+    botGrad.addColorStop(1, "rgba(0,0,0,0.75)");
+    ctx.fillStyle = botGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Subtle top gradient for logo readability
+    const topGrad = ctx.createLinearGradient(0, 0, 0, h * 0.12);
+    topGrad.addColorStop(0, "rgba(0,0,0,0.5)");
+    topGrad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = topGrad;
+    ctx.fillRect(0, 0, w, h * 0.12);
+
+    // Top-left: PLANOPACE logo (small, white, clean)
+    const logoSize = Math.round(w * 0.05);
+    ctx.font = `900 italic ${logoSize}px sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = 10;
+    ctx.fillText("PLANOPACE", w * 0.05, h * 0.03);
+    ctx.shadowBlur = 0;
+
+    // Strava logo area (top-left, below PLANOPACE)
+    const stravaSize = Math.round(w * 0.028);
+    ctx.font = `700 ${stravaSize}px sans-serif`;
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.fillText("⟡ STRAVA", w * 0.05, h * 0.03 + logoSize + 8);
+
+    // Bottom data: distance, pace, time — only if run data exists
+    if (runData) {
+      const dataY = h * 0.88;
+      const labelSize = Math.round(w * 0.028);
+      const valueSize = Math.round(w * 0.055);
+
+      // Parse distance and pace
+      const distLabel = "Distância";
+      const distValue = runData.distance;
+      const paceLabel = "Ritmo";
+      const paceValue = runData.pace;
+
+      // 3 columns evenly spaced
+      const colWidth = w / 3;
+      const cols = [
+        { label: distLabel, value: distValue },
+        { label: paceLabel, value: paceValue },
+      ];
+
+      // Position: left-aligned at bottom
+      const startX = w * 0.05;
+
+      ctx.textBaseline = "top";
+
+      for (let i = 0; i < cols.length; i++) {
+        const x = startX + i * (w * 0.32);
+
+        // Label
+        ctx.font = `500 ${labelSize}px sans-serif`;
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.textAlign = "left";
+        ctx.fillText(cols[i].label, x, dataY);
+
+        // Value
+        ctx.font = `800 ${valueSize}px sans-serif`;
+        ctx.fillStyle = "#FFFFFF";
+        ctx.shadowColor = "rgba(0,0,0,0.5)";
+        ctx.shadowBlur = 6;
+        ctx.fillText(cols[i].value, x, dataY + labelSize + 4);
+        ctx.shadowBlur = 0;
+      }
+
+      // Mini route map on the right if polyline exists
+      if (runData.polyline) {
+        const mapSize = Math.round(w * 0.18);
+        const mapX = w * 0.78;
+        const mapY = dataY - mapSize * 0.1;
+        drawRouteMap(ctx, runData.polyline, mapX, mapY, mapSize, mapSize, "rgba(255,255,255,0.6)", "rgba(255,255,255,0.2)");
+      }
+    }
+
+    // Bottom: planopace.vercel.app (very subtle)
+    ctx.font = `500 ${Math.round(w * 0.022)}px sans-serif`;
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("planopace.vercel.app", w * 0.05, h * 0.975);
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+  }
+
   const capturePhoto = async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -1773,8 +1893,45 @@ export default function CameraCapture({ onCapture, onClose, filterType = "neon" 
                 </>
               )}
 
+              {/* ============ LANDSCAPE LIVE OVERLAY ============ */}
+              {filterType === "landscape" && (
+                <>
+                  {/* Top gradient */}
+                  <div className="absolute top-0 left-0 right-0" style={{ height: "12%", background: "linear-gradient(to bottom, rgba(0,0,0,0.5), transparent)" }} />
+                  {/* Top-left: logo */}
+                  <div className="absolute top-[3%] left-[5%]">
+                    <span className="text-[5vw] sm:text-xl font-black italic text-white" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.6)" }}>
+                      PLANOPACE
+                    </span>
+                    <p className="text-[2vw] sm:text-[8px] font-semibold mt-0.5" style={{ color: "rgba(255,255,255,0.7)" }}>⟡ STRAVA</p>
+                  </div>
+                  {/* Bottom gradient + data */}
+                  <div className="absolute bottom-0 left-0 right-0" style={{ height: "30%", background: "linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.3) 50%, transparent)" }} />
+                  {lastRun && (
+                    <div className="absolute bottom-[6%] left-[5%] flex gap-[8vw]">
+                      <div>
+                        <p className="text-[2.5vw] sm:text-[10px] font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>Distância</p>
+                        <p className="text-[5.5vw] sm:text-2xl font-extrabold text-white" style={{ textShadow: "0 2px 6px rgba(0,0,0,0.5)" }}>{lastRun.distance}</p>
+                      </div>
+                      <div>
+                        <p className="text-[2.5vw] sm:text-[10px] font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>Ritmo</p>
+                        <p className="text-[5.5vw] sm:text-2xl font-extrabold text-white" style={{ textShadow: "0 2px 6px rgba(0,0,0,0.5)" }}>{lastRun.pace}</p>
+                      </div>
+                    </div>
+                  )}
+                  {lastRun?.polyline && (
+                    <div className="absolute bottom-[5%] right-[5%]" style={{ width: "18vw", height: "18vw", opacity: 0.6 }}>
+                      <PolylineMiniMap polyline={lastRun.polyline} accent="rgba(255,255,255,0.6)" />
+                    </div>
+                  )}
+                  <div className="absolute bottom-[2%] left-[5%]">
+                    <p className="text-[2vw] sm:text-[8px]" style={{ color: "rgba(255,255,255,0.4)" }}>planopace.vercel.app</p>
+                  </div>
+                </>
+              )}
+
               {/* ============ DEFAULT FILTERS (neon, ice, wanted, zen) ============ */}
-              {filterType !== "night" && filterType !== "coffee" && filterType !== "military" && (
+              {filterType !== "night" && filterType !== "coffee" && filterType !== "military" && filterType !== "landscape" && (
                 <>
                   {/* Filter-specific additions */}
                   {filterType === "wanted" && (

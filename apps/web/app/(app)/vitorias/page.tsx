@@ -14,6 +14,7 @@ import {
   Moon,
   Coffee,
   Shield,
+  Mountain,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useVictories, type VictoryPhoto } from "@/stores/victories";
@@ -64,6 +65,12 @@ const FILTER_ORBS: FilterOrb[] = [
     icon: <Coffee className="w-7 h-7 text-[#C87533] relative z-10" style={{ filter: "drop-shadow(0 0 6px #C87533)" }} />,
     bg: "from-gray-900 via-amber-950 to-gray-900",
     via: "via-amber-500/10",
+  },
+  {
+    id: "landscape",
+    icon: <Mountain className="w-7 h-7 text-white relative z-10" style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.6))" }} />,
+    bg: "from-gray-900 via-emerald-950 to-gray-900",
+    via: "via-emerald-400/10",
   },
   {
     id: "military",

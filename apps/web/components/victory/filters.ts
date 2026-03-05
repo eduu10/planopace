@@ -1,4 +1,4 @@
-export type FilterType = "neon" | "ice" | "wanted" | "zen" | "night" | "coffee" | "military";
+export type FilterType = "neon" | "ice" | "wanted" | "zen" | "night" | "coffee" | "military" | "landscape";
 
 export interface FilterConfig {
   id: FilterType;
@@ -136,6 +136,27 @@ export const FILTER_CONFIGS: Record<FilterType, FilterConfig> = {
       "Quem corre por caf\u00e9 nunca cansa \u2615\ud83c\udfc3",
       "Blend perfeito: 5km + cappuccino \ud83e\udd24",
       "O caf\u00e9 \u00e9 o motivo, a corrida \u00e9 a desculpa \u2615",
+    ],
+  },
+  landscape: {
+    id: "landscape",
+    name: "Paisagem",
+    accent: "#FFFFFF",
+    accentGlow: "rgba(255,255,255,",
+    cssFilter: "contrast(1.05) saturate(1.1) brightness(1.0)",
+    vignetteOuter: "rgba(0,0,0,0.3)",
+    overlayTint: "rgba(0,0,0,0.0)",
+    phrases: [
+      "A vista paga o esforço 🏔️",
+      "Corrida + paisagem = terapia 🌅",
+      "Quem corre vê o mundo diferente 🌍",
+      "O melhor pós-treino é essa vista 📸",
+      "Registro de quem corre livre 🏃",
+      "Natureza é o melhor coach 🌿",
+      "Cada km uma nova vista 👀",
+      "Correr é explorar o mundo 🗺️",
+      "O cenário mais bonito é suado 💦",
+      "Paisagem de quem não desistiu 💪",
     ],
   },
   military: {
