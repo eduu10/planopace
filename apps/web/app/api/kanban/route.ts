@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const BLOB_ID = "019cb064-6919-728f-a312-f3cceb9bec48";
+const BLOB_ID = "019ccab7-7e68-746c-b568-fe9c15edb8ed";
 const BLOB_URL = `https://jsonblob.com/api/jsonBlob/${BLOB_ID}`;
 
 export async function GET() {
