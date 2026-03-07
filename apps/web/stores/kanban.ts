@@ -24,13 +24,11 @@ export interface Notification {
   createdAt: string;
 }
 
-// ── Cloud sync via jsonblob.com ──
-const BLOB_ID = "019caa14-b7dd-7ce9-878a-df3d977593ad";
-const BLOB_URL = `https://jsonblob.com/api/jsonBlob/${BLOB_ID}`;
+// ── Cloud sync via API proxy (avoids CORS issues with jsonblob.com) ──
+const BLOB_URL = "/api/kanban";
 
-// Local cache keys
-const LOCAL_TASKS_KEY = "planopace_kanban";
-const LOCAL_NOTIF_KEY = "planopace_notifications";
+// Local cache key for notification read states only
+const LOCAL_READ_KEY = "planopace_notif_read";
 
 const admins = [
   { id: "admin-1", name: "Admin PlanoPace" },
@@ -42,7 +40,12 @@ function getAdminName(id: string) {
   return admins.find((a) => a.id === id)?.name || id;
 }
 
-// ── Seed data (used only if cloud has no data) ──
+/** Always use Brasilia time (UTC-3) for consistent timestamps across all users */
+function nowBrasilia(): string {
+  return new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(" ", "T");
+}
+
+// ── Seed data ──
 const SEED_TASKS: KanbanTask[] = [
   {
     id: "task-seed-1",
@@ -158,17 +161,19 @@ const SEED_TASKS: KanbanTask[] = [
   },
 ];
 
-// ── Cloud API helpers ──
+// ── Cloud API ──
 
 interface CloudData {
   tasks: KanbanTask[];
   notifications: Notification[];
+  initialized?: boolean;
 }
 
 async function fetchCloud(): Promise<CloudData | null> {
   try {
     const res = await fetch(BLOB_URL, {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
+      cache: "no-store",
     });
     if (!res.ok) return null;
     return await res.json();
@@ -184,36 +189,56 @@ async function saveCloud(data: CloudData): Promise<boolean> {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(data),
     });
+    if (res.ok) lastWriteTs = Date.now();
     return res.ok;
   } catch {
     return false;
   }
 }
 
-// ── Local cache helpers (fallback when offline) ──
-
-function cacheLocally(data: CloudData) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(LOCAL_TASKS_KEY, JSON.stringify(data.tasks));
-    localStorage.setItem(LOCAL_NOTIF_KEY, JSON.stringify(data.notifications));
-  } catch { /* quota exceeded, ignore */ }
+/**
+ * Atomic cloud operation: fetch latest → apply transform → save.
+ * This is the ONLY way to modify cloud data, ensuring we never lose other users' changes.
+ */
+async function atomicCloudUpdate(
+  transform: (current: CloudData) => CloudData
+): Promise<CloudData | null> {
+  const cloud = await fetchCloud();
+  if (!cloud) return null;
+  const updated = transform(cloud);
+  const ok = await saveCloud(updated);
+  return ok ? updated : null;
 }
 
-function loadLocalCache(): CloudData {
-  if (typeof window === "undefined") return { tasks: [], notifications: [] };
+// ── Local read state (only for notification read markers) ──
+
+function getLocalReadIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
   try {
-    const tasks = JSON.parse(localStorage.getItem(LOCAL_TASKS_KEY) || "[]");
-    const notifs = JSON.parse(localStorage.getItem(LOCAL_NOTIF_KEY) || "[]");
-    return { tasks, notifications: notifs };
+    return new Set(JSON.parse(localStorage.getItem(LOCAL_READ_KEY) || "[]"));
   } catch {
-    return { tasks: [], notifications: [] };
+    return new Set();
   }
 }
 
-// ── Polling interval ──
+function saveLocalReadIds(ids: Set<string>) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LOCAL_READ_KEY, JSON.stringify([...ids]));
+  } catch { /* ignore */ }
+}
+
+function applyLocalReadState(notifs: Notification[]): Notification[] {
+  const readIds = getLocalReadIds();
+  return notifs.map((n) => readIds.has(n.id) ? { ...n, read: true } : n);
+}
+
+// ── Polling ──
 let pollInterval: ReturnType<typeof setInterval> | null = null;
-const POLL_MS = 5000; // 5 seconds
+const POLL_MS = 5000;
+let busy = false; // prevents refresh during an ongoing save
+let lastWriteTs = 0; // timestamp of last cloud write
+const WRITE_COOLDOWN_MS = 6000; // ignore polls for this long after a write
 
 // ── Store ──
 
@@ -241,214 +266,229 @@ export const useKanban = create<KanbanState>((set, get) => ({
 
   hydrate: async () => {
     set({ syncing: true });
-    // Try cloud first
     const cloud = await fetchCloud();
-    if (cloud && cloud.tasks && cloud.tasks.length > 0) {
-      cacheLocally(cloud);
-      // Merge: cloud tasks + local-only notifications (read state is per-user)
-      const localNotifs = loadLocalCache().notifications;
-      // Merge notifications: cloud has shared notifs, local has read states
-      const mergedNotifs = mergeNotifications(cloud.notifications || [], localNotifs);
-      set({ tasks: cloud.tasks, notifications: mergedNotifs, syncing: false });
-    } else {
-      // Cloud empty or unreachable — use local cache or seed
-      const local = loadLocalCache();
-      if (local.tasks.length > 0) {
-        set({ tasks: local.tasks, notifications: local.notifications, syncing: false });
-        // Try to push local data to cloud
-        await saveCloud({ tasks: local.tasks, notifications: local.notifications });
-      } else {
-        // First time ever — seed
-        const data: CloudData = { tasks: SEED_TASKS, notifications: [] };
-        await saveCloud(data);
-        cacheLocally(data);
-        set({ tasks: SEED_TASKS, notifications: [], syncing: false });
+
+    if (cloud && (cloud.initialized || (cloud.tasks && cloud.tasks.length > 0))) {
+      // Cloud is the source of truth
+      if (!cloud.initialized) {
+        // Migrate legacy blob
+        await saveCloud({ ...cloud, initialized: true });
       }
+      set({
+        tasks: cloud.tasks || [],
+        notifications: applyLocalReadState(cloud.notifications || []),
+        syncing: false,
+      });
+    } else if (!cloud) {
+      // Cloud unreachable — show empty state, will sync on next poll
+      set({ tasks: [], notifications: [], syncing: false });
+    } else {
+      // First time — seed
+      const data: CloudData = { tasks: SEED_TASKS, notifications: [], initialized: true };
+      await saveCloud(data);
+      set({ tasks: SEED_TASKS, notifications: [], syncing: false });
     }
   },
 
   startPolling: () => {
     if (pollInterval) return;
-    pollInterval = setInterval(() => {
-      get().refresh();
-    }, POLL_MS);
+    pollInterval = setInterval(() => { get().refresh(); }, POLL_MS);
   },
 
   stopPolling: () => {
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
-    }
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
   },
 
   refresh: async () => {
+    if (busy) return;
+    // Skip poll if a write happened recently (cloud may not have propagated yet)
+    if (Date.now() - lastWriteTs < WRITE_COOLDOWN_MS) return;
     const cloud = await fetchCloud();
     if (!cloud || !cloud.tasks) return;
-    const localNotifs = get().notifications;
-    const mergedNotifs = mergeNotifications(cloud.notifications || [], localNotifs);
-    cacheLocally({ tasks: cloud.tasks, notifications: mergedNotifs });
-    set({ tasks: cloud.tasks, notifications: mergedNotifs });
+    set({
+      tasks: cloud.tasks,
+      notifications: applyLocalReadState(cloud.notifications || []),
+    });
   },
 
   addTask: async (task, currentUserId) => {
-    const now = new Date().toISOString();
+    busy = true;
+    const now = nowBrasilia();
+    const uid = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const newTask: KanbanTask = {
       ...task,
-      id: `task-${Date.now()}`,
+      id: `task-${uid}`,
       createdAt: now,
       updatedAt: now,
     };
-    const tasks = [...get().tasks, newTask];
 
-    // Create notifications for other admins
-    const newNotifs: Notification[] = [];
-    admins.forEach((admin) => {
-      if (admin.id !== currentUserId) {
-        newNotifs.push({
-          id: `notif-${Date.now()}-${admin.id}`,
+    // Optimistic update
+    set({ tasks: [...get().tasks, newTask] });
+
+    const result = await atomicCloudUpdate((cloud) => {
+      const newNotifs: Notification[] = admins
+        .filter((a) => a.id !== currentUserId)
+        .map((a, i) => ({
+          id: `notif-${uid}-${i}`,
           message: `${getAdminName(currentUserId)} criou a tarefa "${newTask.title}"`,
           taskId: newTask.id,
           fromUser: currentUserId,
-          toUser: admin.id,
+          toUser: a.id,
           read: false,
           createdAt: now,
-        });
-      }
+        }));
+      return {
+        ...cloud,
+        tasks: [...cloud.tasks, newTask],
+        notifications: [...(cloud.notifications || []), ...newNotifs],
+        initialized: true,
+      };
     });
-    const notifications = [...get().notifications, ...newNotifs];
 
-    // Update state immediately (optimistic)
-    set({ tasks, notifications });
-    cacheLocally({ tasks, notifications });
-
-    // Sync to cloud
-    await saveCloud({ tasks, notifications });
+    if (result) {
+      set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
+    } else {
+      // Revert optimistic update on failure
+      const cloud = await fetchCloud();
+      if (cloud?.tasks) set({ tasks: cloud.tasks, notifications: applyLocalReadState(cloud.notifications || []) });
+    }
+    busy = false;
   },
 
   moveTask: async (taskId, newStatus, currentUserId, pauseReason) => {
-    const now = new Date().toISOString();
-    const tasks = get().tasks.map((t) =>
-      t.id === taskId
-        ? { ...t, status: newStatus, updatedAt: now, pauseReason: newStatus === "pausado" ? pauseReason : undefined }
-        : t
-    );
+    busy = true;
+    const now = nowBrasilia();
 
-    const task = tasks.find((t) => t.id === taskId);
+    // Optimistic update
+    const optimistic = get().tasks.map((t) =>
+      t.id === taskId ? { ...t, status: newStatus, updatedAt: now, pauseReason: newStatus === "pausado" ? pauseReason : undefined } : t
+    );
+    set({ tasks: optimistic });
+
     const statusLabels: Record<KanbanStatus, string> = {
-      ideias: "Ideias",
-      esperando: "Esperando",
-      executando: "Executando",
-      pausado: "Pausado",
-      conferir: "Conferir",
-      finalizado: "Finalizado",
+      ideias: "Ideias", esperando: "Esperando", executando: "Executando",
+      pausado: "Pausado", conferir: "Conferir", finalizado: "Finalizado",
     };
 
-    const newNotifs: Notification[] = [];
-    admins.forEach((admin) => {
-      if (admin.id !== currentUserId) {
-        newNotifs.push({
-          id: `notif-${Date.now()}-${admin.id}`,
+    const result = await atomicCloudUpdate((cloud) => {
+      const tasks = cloud.tasks.map((t) =>
+        t.id === taskId ? { ...t, status: newStatus, updatedAt: now, pauseReason: newStatus === "pausado" ? pauseReason : undefined } : t
+      );
+      const task = tasks.find((t) => t.id === taskId);
+      const uid = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const newNotifs: Notification[] = admins
+        .filter((a) => a.id !== currentUserId)
+        .map((a, i) => ({
+          id: `notif-${uid}-${i}`,
           message: `${getAdminName(currentUserId)} moveu "${task?.title}" para ${statusLabels[newStatus]}${newStatus === "pausado" && pauseReason ? ` (${pauseReason})` : ""}`,
           taskId,
           fromUser: currentUserId,
-          toUser: admin.id,
+          toUser: a.id,
           read: false,
           createdAt: now,
-        });
-      }
+        }));
+      return {
+        ...cloud,
+        tasks,
+        notifications: [...(cloud.notifications || []), ...newNotifs],
+        initialized: true,
+      };
     });
-    const notifications = [...get().notifications, ...newNotifs];
 
-    set({ tasks, notifications });
-    cacheLocally({ tasks, notifications });
-    await saveCloud({ tasks, notifications });
+    if (result) {
+      set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
+    } else {
+      const cloud = await fetchCloud();
+      if (cloud?.tasks) set({ tasks: cloud.tasks, notifications: applyLocalReadState(cloud.notifications || []) });
+    }
+    busy = false;
   },
 
   updateTask: async (taskId, updates, currentUserId) => {
-    const now = new Date().toISOString();
-    const tasks = get().tasks.map((t) =>
-      t.id === taskId ? { ...t, ...updates, updatedAt: now } : t
-    );
+    busy = true;
+    const now = nowBrasilia();
 
-    const task = tasks.find((t) => t.id === taskId);
-    const newNotifs: Notification[] = [];
-    admins.forEach((admin) => {
-      if (admin.id !== currentUserId) {
-        newNotifs.push({
-          id: `notif-${Date.now()}-${admin.id}`,
+    // Optimistic
+    set({ tasks: get().tasks.map((t) => t.id === taskId ? { ...t, ...updates, updatedAt: now } : t) });
+
+    const result = await atomicCloudUpdate((cloud) => {
+      const tasks = cloud.tasks.map((t) =>
+        t.id === taskId ? { ...t, ...updates, updatedAt: now } : t
+      );
+      const task = tasks.find((t) => t.id === taskId);
+      const uid = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const newNotifs: Notification[] = admins
+        .filter((a) => a.id !== currentUserId)
+        .map((a, i) => ({
+          id: `notif-${uid}-${i}`,
           message: `${getAdminName(currentUserId)} atualizou a tarefa "${task?.title}"`,
           taskId,
           fromUser: currentUserId,
-          toUser: admin.id,
+          toUser: a.id,
           read: false,
           createdAt: now,
-        });
-      }
+        }));
+      return {
+        ...cloud,
+        tasks,
+        notifications: [...(cloud.notifications || []), ...newNotifs],
+        initialized: true,
+      };
     });
-    const notifications = [...get().notifications, ...newNotifs];
 
-    set({ tasks, notifications });
-    cacheLocally({ tasks, notifications });
-    await saveCloud({ tasks, notifications });
+    if (result) {
+      set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
+    } else {
+      const cloud = await fetchCloud();
+      if (cloud?.tasks) set({ tasks: cloud.tasks, notifications: applyLocalReadState(cloud.notifications || []) });
+    }
+    busy = false;
   },
 
   deleteTask: async (taskId) => {
-    const tasks = get().tasks.filter((t) => t.id !== taskId);
-    const notifications = get().notifications;
+    busy = true;
 
-    set({ tasks });
-    cacheLocally({ tasks, notifications });
-    await saveCloud({ tasks, notifications });
+    // Optimistic
+    set({ tasks: get().tasks.filter((t) => t.id !== taskId) });
+
+    const result = await atomicCloudUpdate((cloud) => ({
+      ...cloud,
+      tasks: cloud.tasks.filter((t) => t.id !== taskId),
+      initialized: true,
+    }));
+
+    if (result) {
+      set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
+    } else {
+      const cloud = await fetchCloud();
+      if (cloud?.tasks) set({ tasks: cloud.tasks, notifications: applyLocalReadState(cloud.notifications || []) });
+    }
+    busy = false;
   },
 
   markNotifRead: (notifId) => {
-    const notifications = get().notifications.map((n) =>
-      n.id === notifId ? { ...n, read: true } : n
-    );
-    // Read state is local-only (each user manages their own)
-    set({ notifications });
-    if (typeof window !== "undefined") {
-      localStorage.setItem(LOCAL_NOTIF_KEY, JSON.stringify(notifications));
-    }
+    const readIds = getLocalReadIds();
+    readIds.add(notifId);
+    saveLocalReadIds(readIds);
+    set({
+      notifications: get().notifications.map((n) => n.id === notifId ? { ...n, read: true } : n),
+    });
   },
 
   markAllNotifsRead: (userId) => {
-    const notifications = get().notifications.map((n) =>
-      n.toUser === userId ? { ...n, read: true } : n
-    );
-    set({ notifications });
-    if (typeof window !== "undefined") {
-      localStorage.setItem(LOCAL_NOTIF_KEY, JSON.stringify(notifications));
-    }
+    const readIds = getLocalReadIds();
+    get().notifications.forEach((n) => {
+      if (n.toUser === userId) readIds.add(n.id);
+    });
+    saveLocalReadIds(readIds);
+    set({
+      notifications: get().notifications.map((n) => n.toUser === userId ? { ...n, read: true } : n),
+    });
   },
 
   getUnreadCount: (userId) => {
     return get().notifications.filter((n) => n.toUser === userId && !n.read).length;
   },
 }));
-
-// Merge cloud notifications with local read states
-function mergeNotifications(cloudNotifs: Notification[], localNotifs: Notification[]): Notification[] {
-  const localReadMap = new Map<string, boolean>();
-  localNotifs.forEach((n) => {
-    if (n.read) localReadMap.set(n.id, true);
-  });
-
-  // Start with cloud notifications, preserving local read states
-  const merged = cloudNotifs.map((n) => ({
-    ...n,
-    read: localReadMap.has(n.id) ? true : n.read,
-  }));
-
-  // Add any local-only notifications not in cloud
-  const cloudIds = new Set(cloudNotifs.map((n) => n.id));
-  localNotifs.forEach((n) => {
-    if (!cloudIds.has(n.id)) {
-      merged.push(n);
-    }
-  });
-
-  return merged;
-}
 
 export const ADMIN_LIST = admins;
