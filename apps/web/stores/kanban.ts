@@ -171,7 +171,7 @@ interface CloudData {
 
 async function fetchCloud(): Promise<CloudData | null> {
   try {
-    const res = await fetch(BLOB_URL, {
+    const res = await fetch(`${BLOB_URL}?_t=${Date.now()}`, {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       cache: "no-store",
     });
@@ -189,7 +189,7 @@ async function saveCloud(data: CloudData): Promise<boolean> {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(data),
     });
-    if (res.ok) lastWriteTs = Date.now();
+    if (res.ok) writeVersion++;
     return res.ok;
   } catch {
     return false;
@@ -235,10 +235,8 @@ function applyLocalReadState(notifs: Notification[]): Notification[] {
 
 // ── Polling ──
 let pollInterval: ReturnType<typeof setInterval> | null = null;
-const POLL_MS = 5000;
-let busy = false; // prevents refresh during an ongoing save
-let lastWriteTs = 0; // timestamp of last cloud write
-const WRITE_COOLDOWN_MS = 6000; // ignore polls for this long after a write
+const POLL_MS = 8000;
+let writeVersion = 0; // incremented on every write; polls check this before applying
 
 // ── Store ──
 
@@ -300,11 +298,12 @@ export const useKanban = create<KanbanState>((set, get) => ({
   },
 
   refresh: async () => {
-    if (busy) return;
-    // Skip poll if a write happened recently (cloud may not have propagated yet)
-    if (Date.now() - lastWriteTs < WRITE_COOLDOWN_MS) return;
+    // Capture version before async fetch; if a write happens during the fetch,
+    // the fetched data is stale and must be discarded.
+    const vBefore = writeVersion;
     const cloud = await fetchCloud();
     if (!cloud || !cloud.tasks) return;
+    if (writeVersion !== vBefore) return; // a write happened during fetch — discard
     set({
       tasks: cloud.tasks,
       notifications: applyLocalReadState(cloud.notifications || []),
@@ -312,7 +311,6 @@ export const useKanban = create<KanbanState>((set, get) => ({
   },
 
   addTask: async (task, currentUserId) => {
-    busy = true;
     const now = nowBrasilia();
     const uid = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const newTask: KanbanTask = {
@@ -325,6 +323,8 @@ export const useKanban = create<KanbanState>((set, get) => ({
     // Optimistic update
     set({ tasks: [...get().tasks, newTask] });
 
+    // writeVersion is incremented inside saveCloud on success,
+    // which automatically invalidates any in-flight polls.
     const result = await atomicCloudUpdate((cloud) => {
       const newNotifs: Notification[] = admins
         .filter((a) => a.id !== currentUserId)
@@ -347,16 +347,10 @@ export const useKanban = create<KanbanState>((set, get) => ({
 
     if (result) {
       set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
-    } else {
-      // Revert optimistic update on failure
-      const cloud = await fetchCloud();
-      if (cloud?.tasks) set({ tasks: cloud.tasks, notifications: applyLocalReadState(cloud.notifications || []) });
     }
-    busy = false;
   },
 
   moveTask: async (taskId, newStatus, currentUserId, pauseReason) => {
-    busy = true;
     const now = nowBrasilia();
 
     // Optimistic update
@@ -397,15 +391,10 @@ export const useKanban = create<KanbanState>((set, get) => ({
 
     if (result) {
       set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
-    } else {
-      const cloud = await fetchCloud();
-      if (cloud?.tasks) set({ tasks: cloud.tasks, notifications: applyLocalReadState(cloud.notifications || []) });
     }
-    busy = false;
   },
 
   updateTask: async (taskId, updates, currentUserId) => {
-    busy = true;
     const now = nowBrasilia();
 
     // Optimistic
@@ -438,16 +427,10 @@ export const useKanban = create<KanbanState>((set, get) => ({
 
     if (result) {
       set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
-    } else {
-      const cloud = await fetchCloud();
-      if (cloud?.tasks) set({ tasks: cloud.tasks, notifications: applyLocalReadState(cloud.notifications || []) });
     }
-    busy = false;
   },
 
   deleteTask: async (taskId) => {
-    busy = true;
-
     // Optimistic
     set({ tasks: get().tasks.filter((t) => t.id !== taskId) });
 
@@ -459,11 +442,7 @@ export const useKanban = create<KanbanState>((set, get) => ({
 
     if (result) {
       set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
-    } else {
-      const cloud = await fetchCloud();
-      if (cloud?.tasks) set({ tasks: cloud.tasks, notifications: applyLocalReadState(cloud.notifications || []) });
     }
-    busy = false;
   },
 
   markNotifRead: (notifId) => {
