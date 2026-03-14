@@ -189,7 +189,10 @@ async function saveCloud(data: CloudData): Promise<boolean> {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(data),
     });
-    if (res.ok) writeVersion++;
+    if (res.ok) {
+      writeVersion++;
+      lastWriteTime = Date.now();
+    }
     return res.ok;
   } catch {
     return false;
@@ -237,6 +240,8 @@ function applyLocalReadState(notifs: Notification[]): Notification[] {
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 const POLL_MS = 8000;
 let writeVersion = 0; // incremented on every write; polls check this before applying
+let lastWriteTime = 0; // timestamp of last write, used to skip polls too close to a write
+const WRITE_COOLDOWN_MS = 5000; // ignore polls for 5s after a write
 
 // ── Store ──
 
@@ -298,12 +303,20 @@ export const useKanban = create<KanbanState>((set, get) => ({
   },
 
   refresh: async () => {
+    // Skip poll if a write happened recently — cloud may not reflect it yet
+    if (Date.now() - lastWriteTime < WRITE_COOLDOWN_MS) return;
+
     // Capture version before async fetch; if a write happens during the fetch,
     // the fetched data is stale and must be discarded.
     const vBefore = writeVersion;
     const cloud = await fetchCloud();
     if (!cloud || !cloud.tasks) return;
     if (writeVersion !== vBefore) return; // a write happened during fetch — discard
+
+    // Don't overwrite local tasks with empty cloud data if we have tasks locally
+    const currentTasks = get().tasks;
+    if (cloud.tasks.length === 0 && currentTasks.length > 0) return;
+
     set({
       tasks: cloud.tasks,
       notifications: applyLocalReadState(cloud.notifications || []),
@@ -321,7 +334,8 @@ export const useKanban = create<KanbanState>((set, get) => ({
     };
 
     // Optimistic update
-    set({ tasks: [...get().tasks, newTask] });
+    const prevTasks = get().tasks;
+    set({ tasks: [...prevTasks, newTask] });
 
     // writeVersion is incremented inside saveCloud on success,
     // which automatically invalidates any in-flight polls.
@@ -347,6 +361,9 @@ export const useKanban = create<KanbanState>((set, get) => ({
 
     if (result) {
       set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
+    } else {
+      // Rollback optimistic update on failure
+      set({ tasks: prevTasks });
     }
   },
 
@@ -354,7 +371,8 @@ export const useKanban = create<KanbanState>((set, get) => ({
     const now = nowBrasilia();
 
     // Optimistic update
-    const optimistic = get().tasks.map((t) =>
+    const prevTasks = get().tasks;
+    const optimistic = prevTasks.map((t) =>
       t.id === taskId ? { ...t, status: newStatus, updatedAt: now, pauseReason: newStatus === "pausado" ? pauseReason : undefined } : t
     );
     set({ tasks: optimistic });
@@ -391,6 +409,9 @@ export const useKanban = create<KanbanState>((set, get) => ({
 
     if (result) {
       set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
+    } else {
+      // Rollback optimistic update on failure
+      set({ tasks: prevTasks });
     }
   },
 
@@ -398,7 +419,8 @@ export const useKanban = create<KanbanState>((set, get) => ({
     const now = nowBrasilia();
 
     // Optimistic
-    set({ tasks: get().tasks.map((t) => t.id === taskId ? { ...t, ...updates, updatedAt: now } : t) });
+    const prevTasks = get().tasks;
+    set({ tasks: prevTasks.map((t) => t.id === taskId ? { ...t, ...updates, updatedAt: now } : t) });
 
     const result = await atomicCloudUpdate((cloud) => {
       const tasks = cloud.tasks.map((t) =>
@@ -427,12 +449,15 @@ export const useKanban = create<KanbanState>((set, get) => ({
 
     if (result) {
       set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
+    } else {
+      set({ tasks: prevTasks });
     }
   },
 
   deleteTask: async (taskId) => {
     // Optimistic
-    set({ tasks: get().tasks.filter((t) => t.id !== taskId) });
+    const prevTasks = get().tasks;
+    set({ tasks: prevTasks.filter((t) => t.id !== taskId) });
 
     const result = await atomicCloudUpdate((cloud) => ({
       ...cloud,
@@ -442,6 +467,8 @@ export const useKanban = create<KanbanState>((set, get) => ({
 
     if (result) {
       set({ tasks: result.tasks, notifications: applyLocalReadState(result.notifications) });
+    } else {
+      set({ tasks: prevTasks });
     }
   },
 

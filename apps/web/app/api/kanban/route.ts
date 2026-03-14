@@ -7,19 +7,24 @@ const BLOB_ID = "019ccab7-7e68-746c-b568-fe9c15edb8ed";
 const BLOB_URL = `https://jsonblob.com/api/jsonBlob/${BLOB_ID}`;
 
 export async function GET() {
-  const res = await fetch(BLOB_URL, {
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    cache: "no-store",
-  });
+  try {
+    const res = await fetch(BLOB_URL, {
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      cache: "no-store",
+    });
 
-  if (!res.ok) {
-    return NextResponse.json({ tasks: [], notifications: [], initialized: false }, { status: 200 });
+    if (!res.ok) {
+      // Signal to the client that the cloud is unavailable
+      return NextResponse.json({ error: "Cloud unavailable" }, { status: 502 });
+    }
+
+    const data = await res.json();
+    return NextResponse.json(data, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+    });
+  } catch {
+    return NextResponse.json({ error: "Cloud unavailable" }, { status: 502 });
   }
-
-  const data = await res.json();
-  return NextResponse.json(data, {
-    headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
-  });
 }
 
 export async function PUT(req: NextRequest) {
