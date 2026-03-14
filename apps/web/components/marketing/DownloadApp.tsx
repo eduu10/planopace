@@ -1,12 +1,19 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Download, Zap, Activity, BarChart3 } from "lucide-react";
+import { Download, Zap, Activity, BarChart3, Apple } from "lucide-react";
 
 const APK_URL = "https://expo.dev/artifacts/eas/qCoSpwTu1ofwRSJ1EYa5ZG.apk";
 
-export default function DownloadApp() {
+function trackClick(event: string) {
+  fetch("/api/track", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event }),
+  }).catch(() => {});
+}
 
+export default function DownloadApp() {
   return (
     <section className="py-24 bg-zinc-950 relative overflow-hidden">
       <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-orange-600/10 rounded-full blur-[150px] pointer-events-none" />
@@ -154,14 +161,24 @@ export default function DownloadApp() {
               ))}
             </div>
 
-            <a
-              href={APK_URL}
-              download
-              className="inline-flex items-center gap-3 bg-orange-500 hover:bg-orange-600 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 shadow-lg shadow-orange-500/25"
-            >
-              <Download className="w-6 h-6" />
-              Baixar para Android
-            </a>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <a
+                href={APK_URL}
+                download
+                className="inline-flex items-center gap-3 bg-orange-500 hover:bg-orange-600 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 shadow-lg shadow-orange-500/25"
+              >
+                <Download className="w-6 h-6" />
+                Baixar para Android
+              </a>
+              <button
+                type="button"
+                onClick={() => trackClick("ios_download_interest")}
+                className="inline-flex items-center gap-3 bg-white/5 text-gray-400 px-8 py-4 rounded-2xl font-bold text-lg border border-white/10 cursor-default"
+              >
+                <Apple className="w-6 h-6" />
+                Para iOS em breve
+              </button>
+            </div>
             <p className="text-gray-500 text-sm mt-3">
               APK v1.0.0 &middot; Android 8.0+
             </p>

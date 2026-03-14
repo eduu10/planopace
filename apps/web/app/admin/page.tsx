@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Users, CreditCard, TrendingUp, Activity, ArrowUpRight, ArrowDownRight, Camera } from "lucide-react";
+import { Users, CreditCard, TrendingUp, Activity, ArrowUpRight, ArrowDownRight, Camera, Apple } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { useVictories } from "@/stores/victories";
 import Link from "next/link";
@@ -55,9 +55,14 @@ const planColors: Record<string, string> = {
 
 export default function AdminDashboard() {
   const { victories, hydrate } = useVictories();
+  const [iosClicks, setIosClicks] = useState(0);
 
   useEffect(() => {
     hydrate();
+    fetch("/api/track?event=ios_download_interest")
+      .then((r) => r.json())
+      .then((d) => setIosClicks(d.count ?? 0))
+      .catch(() => {});
   }, [hydrate]);
 
   return (
@@ -116,6 +121,26 @@ export default function AdminDashboard() {
           </div>
         </motion.div>
       </Link>
+
+      {/* iOS Interest Counter */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="bg-gradient-to-r from-gray-500/10 to-gray-600/5 rounded-2xl p-5 border border-white/[0.06]"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="bg-white/10 p-3 rounded-xl">
+              <Apple className="w-6 h-6 text-gray-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{iosClicks}</p>
+              <p className="text-sm text-gray-400">Cliques em &quot;Para iOS em breve&quot;</p>
+            </div>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
