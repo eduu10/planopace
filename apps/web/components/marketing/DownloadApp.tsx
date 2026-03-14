@@ -1,28 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Download, Smartphone, Zap, Activity, BarChart3, Apple } from "lucide-react";
+import { Download, Zap, Activity, BarChart3 } from "lucide-react";
 
 const APK_URL = "https://expo.dev/artifacts/eas/qCoSpwTu1ofwRSJ1EYa5ZG.apk";
-const IOS_URL = "https://expo.dev/accounts/tylerduuu/projects/planopace/builds/6a668907-a4f3-432b-bd1e-63d65d46ce6c";
-
-type Platform = "android" | "ios" | "desktop";
-
-function detectPlatform(): Platform {
-  if (typeof navigator === "undefined") return "desktop";
-  const ua = navigator.userAgent.toLowerCase();
-  if (/iphone|ipad|ipod/.test(ua)) return "ios";
-  if (/android/.test(ua)) return "android";
-  return "desktop";
-}
 
 export default function DownloadApp() {
-  const [platform, setPlatform] = useState<Platform>("desktop");
-
-  useEffect(() => {
-    setPlatform(detectPlatform());
-  }, []);
 
   return (
     <section className="py-24 bg-zinc-950 relative overflow-hidden">
@@ -171,33 +154,16 @@ export default function DownloadApp() {
               ))}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              {platform !== "ios" && (
-                <a
-                  href={APK_URL}
-                  download
-                  className="inline-flex items-center gap-3 bg-orange-500 hover:bg-orange-600 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 shadow-lg shadow-orange-500/25"
-                >
-                  <Download className="w-6 h-6" />
-                  Baixar para Android
-                </a>
-              )}
-              {platform !== "android" && (
-                <a
-                  href={IOS_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-3 bg-white/10 hover:bg-white/15 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 border border-white/10"
-                >
-                  <Apple className="w-6 h-6" />
-                  Baixar para iOS
-                </a>
-              )}
-            </div>
+            <a
+              href={APK_URL}
+              download
+              className="inline-flex items-center gap-3 bg-orange-500 hover:bg-orange-600 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 shadow-lg shadow-orange-500/25"
+            >
+              <Download className="w-6 h-6" />
+              Baixar para Android
+            </a>
             <p className="text-gray-500 text-sm mt-3">
-              {platform === "ios" && "iOS 15+"}
-              {platform === "android" && "Android 8.0+"}
-              {platform === "desktop" && <>Android 8.0+ &middot; iOS 15+</>}
+              APK v1.0.0 &middot; Android 8.0+
             </p>
           </motion.div>
 
