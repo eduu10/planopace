@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { Download, Smartphone, Zap, Activity, BarChart3 } from "lucide-react";
 
-const APK_URL = "https://expo.dev/artifacts/eas/828P6WjzqSszPyQ8Vp6CHt.apk";
+const APK_URL = "https://expo.dev/artifacts/eas/qCoSpwTu1ofwRSJ1EYa5ZG.apk";
 
 export default function DownloadApp() {
   return (
